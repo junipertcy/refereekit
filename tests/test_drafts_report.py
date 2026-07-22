@@ -1,5 +1,5 @@
 # tests/test_drafts_report.py
-from refereekit.drafts import report, Draft
+from refereekit.drafts import report, Draft, build_prompt
 from refereekit.llm import FakeBackend
 from refereekit.session import Session
 from refereekit.types import Claim
@@ -30,3 +30,10 @@ def test_prompt_contains_style_and_pool(tmp_path, sample_pdf_path):
     report(s, s.get_state("verdict"), {}, backend=FakeBackend(capture), style_path="style/STYLE.md")
     assert "The authors may consider" in seen["p"]   # STYLE.md content present
     assert "3" in seen["p"]                            # pool claim anchor present
+
+def test_prompt_contains_citation_format_instruction():
+    pool = {"claims": [], "verdict": {}}
+    prompt = build_prompt(pool, "test style", {})
+    assert "Eq. (N)" in prompt or "Eq. (3)" in prompt  # instruction mentions Eq. (N) format
+    assert "p. N" in prompt or "p. 16" in prompt       # instruction mentions p. N format
+    assert "CITATION FORMAT" in prompt                  # explicit section header

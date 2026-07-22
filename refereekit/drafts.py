@@ -42,7 +42,12 @@ def build_prompt(pool: dict, style: str, section_lengths: dict) -> str:
         f"=== VERDICT ===\n{pool['verdict']}\n\n"
         f"=== VERIFIED CLAIMS (cite ONLY these anchors) ===\n{claim_lines}\n\n"
         f"=== SECTION LENGTHS ===\n{lengths}\n\n"
-        "Cite page/equation anchors only if they appear in the verified claims above."
+        "Cite page/equation anchors only if they appear in the verified claims above.\n\n"
+        "=== CITATION FORMAT ===\n"
+        "When citing pages and equations, use ONLY these forms:\n"
+        "- Page citations: 'p. N' (e.g., 'p. 16')\n"
+        "- Equation citations: 'Eq. (N)' with parentheses (e.g., 'Eq. (3)')\n"
+        "Use no other citation style or format."
     )
 
 def report(session, verdict: dict, section_lengths: dict, *, backend, style_path) -> Draft:
