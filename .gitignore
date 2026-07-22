@@ -46,3 +46,9 @@ __pycache__/
 /verify_p16.py
 /verify2.py
 /verify3.py
+
+# Python editable-install metadata
+*.egg-info/
+# LaTeX fixture build artifacts (the .pdf is committed; these are not)
+tests/fixtures/*.aux
+tests/fixtures/*.log
