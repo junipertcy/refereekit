@@ -63,3 +63,36 @@ def report(session, verdict: dict, section_lengths: dict, *, backend, style_path
         elif verify(a, doc).status != "PASS":
             flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
     return Draft(text=prose, flags=flags)
+
+def build_editor_prompt(pool: dict, style: str, answers: dict) -> str:
+    ans = "\n".join(f"{k}) {v}" for k, v in answers.items()) or "(no questions)"
+    claim_lines = "\n".join(
+        f"- {c.kind} ({c.anchor}): {c.text}" for c in pool["claims"]
+    ) or "(no verified claims available)"
+    return (
+        "Write a SHORT editor-response letter in the voice described below. "
+        "Answer each item with a lead verdict word, in a/b/c/d structure.\n\n"
+        f"=== VOICE GUIDE ===\n{style}\n\n"
+        f"=== EDITOR QUESTIONS / YOUR ANSWERS ===\n{ans}\n\n"
+        f"=== VERIFIED CLAIMS (cite ONLY these anchors) ===\n{claim_lines}\n\n"
+        "Cite page/equation anchors only if they appear in the verified claims above.\n\n"
+        "=== CITATION FORMAT ===\n"
+        "When citing pages and equations, use ONLY these forms:\n"
+        "- Page citations: 'p. N' (e.g., 'p. 16')\n"
+        "- Equation citations: 'Eq. (N)' with parentheses (e.g., 'Eq. (3)')\n"
+        "Use no other citation style or format."
+    )
+
+def editor_letter(session, answers: dict, *, backend, style_path) -> Draft:
+    pool = build_pool(session)
+    prompt = build_editor_prompt(pool, load_style(style_path), answers)
+    prose = complete(prompt, backend=backend, manuscript_ok=True)
+    doc = session.load_doc()
+    pool_keys = {(c.kind, c.anchor) for c in pool["claims"]}
+    flags = []
+    for a in extract_anchors(prose):
+        if (a.kind, a.anchor) not in pool_keys:
+            flags.append(Flag(a.anchor, a.kind, "not in verified pool"))
+        elif verify(a, doc).status != "PASS":
+            flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
+    return Draft(text=prose, flags=flags)
