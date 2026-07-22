@@ -52,3 +52,6 @@ __pycache__/
 # LaTeX fixture build artifacts (the .pdf is committed; these are not)
 tests/fixtures/*.aux
 tests/fixtures/*.log
+
+# Per-review working directories (never committed)
+/work/
