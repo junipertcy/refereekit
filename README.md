@@ -28,7 +28,7 @@ Generate referee reports and editor letters using a verified claim pool.
   to control the returned text.
 - **Real LLM (zero-retention only):** Set `REFEREEKIT_ZERO_RETENTION=1` to confirm
   zero-retention terms. Optionally set `REFEREEKIT_MODEL` (default: `claude-opus-4-8`).
-  Requires the `anthropic` package: `pip install -e ".[anthropic]"`
+  Requires the `anthropic` package: `pip install -e ".[llm]"`
 
 **Commands:**
     # Generate a referee report

@@ -37,3 +37,20 @@ def test_prompt_contains_citation_format_instruction():
     assert "Eq. (N)" in prompt or "Eq. (3)" in prompt  # instruction mentions Eq. (N) format
     assert "p. N" in prompt or "p. 16" in prompt       # instruction mentions p. N format
     assert "CITATION FORMAT" in prompt                  # explicit section header
+
+def test_report_flags_failed_reverification(tmp_path, sample_pdf_path):
+    """Test that an anchor IN the pool but failing re-verification is flagged."""
+    s = Session.create(tmp_path, "p")
+    s.save_doc(ingest(sample_pdf_path))
+    # Record a claim for equation 7 (NOT in the fixture, which has only 1,2,3)
+    # This claim is in the pool, but re-verification will fail
+    s.record_claim(Claim("nonexistent identity", "equation", "7"))
+    canned = "The draft cites Eq. (7)."
+    d = report(s, {}, {}, backend=FakeBackend(canned), style_path="style/STYLE.md")
+    # Eq. (7) should be flagged because it's in pool but fails re-verification
+    flagged = {(f.kind, f.anchor) for f in d.flags}
+    assert ("equation", "7") in flagged
+    # Check that the reason mentions failed verification (not "not in pool")
+    eq7_flags = [f for f in d.flags if f.kind == "equation" and f.anchor == "7"]
+    assert len(eq7_flags) == 1
+    assert "failed" in eq7_flags[0].reason.lower() or "verify" in eq7_flags[0].reason.lower()

@@ -16,3 +16,12 @@ def test_non_zero_retention_fails_closed():
 def test_callable_canned_receives_prompt():
     b = FakeBackend(lambda p: f"echo:{p}", zero_retention=True)
     assert complete("XYZ", backend=b) == "echo:XYZ"
+
+
+def test_missing_zero_retention_attr_fails_closed():
+    """Backend without zero_retention attribute should fail closed."""
+    class NoAttrBackend:
+        def complete(self, prompt):
+            return "should not see this"
+    with pytest.raises(RetentionError):
+        complete("prompt", backend=NoAttrBackend(), manuscript_ok=True)

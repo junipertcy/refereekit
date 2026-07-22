@@ -32,8 +32,8 @@ no raw report text, no manuscript identifiers, no other papers' content.**
   authors could …"*, or a direct question (*"Is the agreement sensitive to …?"*).
 - **Emphasis via `_underscores_`** for key qualifiers (e.g. _very_ weak, _visually_),
   and `*asterisks*` sparingly for a sharp point.
-- **Always cite a specific location** for a factual claim — page, equation, figure,
-  or section (e.g. "(§VI.C, p. 16)", "Eq. (89)", "Fig. 7"). No unanchored assertions.
+- **Always cite a specific location** for a factual claim — page or equation
+  (e.g. "p. 16", "Eq. (3)"). No unanchored assertions.
 - **Close warmly.** End on the paper's merit and a forward look: acknowledge the
   hard problem, restate that the requests aim to align claims with evidence, and say
   you look forward to the revision. A congratulatory sentence is welcome when earned.
