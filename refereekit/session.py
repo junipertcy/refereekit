@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from .types import Document
+from .types import Document, Claim
 from .ingest import to_json, from_json
 
 class Session:
@@ -33,3 +33,11 @@ class Session:
 
     def get_state(self, key, default=None):
         return self._state().get(key, default)
+
+    def record_claim(self, claim: Claim) -> None:
+        claims = self.get_state("claims", [])
+        claims.append({"text": claim.text, "kind": claim.kind, "anchor": claim.anchor})
+        self.set_state("claims", claims)
+
+    def verified_claims(self) -> list[Claim]:
+        return [Claim(**c) for c in self.get_state("claims", [])]
