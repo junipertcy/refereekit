@@ -17,3 +17,32 @@
 __pycache__/
 *.pyc
 *_study/
+.superpowers/
+
+# Root-level exploration scripts (one-off tooling superseded by refereekit package)
+# These scripts reference confidential manuscript IDs and must never be committed.
+/analyze.py
+/audit.py
+/by_section.py
+/count_para.py
+/count_para2.py
+/*_demo.py
+/diag.py
+/diag2.py
+/errbar.py
+/fig8.py
+/fig8body.py
+/figcheck.py
+/final_count.py
+/headers.py
+/locate.py
+/locate2.py
+/locate3.py
+/para_full.py
+/sweep.py
+/topnum.py
+/verify_all.py
+/verify_indent.py
+/verify_p16.py
+/verify2.py
+/verify3.py
