@@ -1,6 +1,6 @@
+import os
 import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 @dataclass
@@ -14,7 +14,7 @@ class MemoryStore(Protocol):
     def store(self, note: "Note") -> None: ...
 
 class SQLiteMemoryStore:
-    def __init__(self, path):
+    def __init__(self, path: str | os.PathLike):
         self.path = str(path)
         with sqlite3.connect(self.path) as c:
             c.execute("CREATE TABLE IF NOT EXISTS notes (text TEXT, venue TEXT, kind TEXT)")
