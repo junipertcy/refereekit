@@ -1,6 +1,7 @@
 # refereekit/cli.py
 import argparse, sys
 from pathlib import Path
+import pymupdf
 from .ingest import ingest
 from .verify import verify
 from .types import Claim
@@ -21,16 +22,24 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.cmd == "ingest":
-        s = Session.create(Path(args.session).parent, Path(args.session).name)
-        doc = ingest(args.pdf); s.save_doc(doc)
-        print(f"ingested: {len(doc.pages)} pages, {len(doc.equations)} equations")
-        return 0
+        try:
+            s = Session.create(Path(args.session).parent, Path(args.session).name)
+            doc = ingest(args.pdf); s.save_doc(doc)
+            print(f"ingested: {len(doc.pages)} pages, {len(doc.equations)} equations")
+            return 0
+        except (FileNotFoundError, ValueError, pymupdf.FileNotFoundError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
 
     if args.cmd == "verify":
-        s = Session(Path(args.session))
-        v = verify(Claim(args.text, args.kind, args.anchor), s.load_doc())
-        print(f"{v.status}: {v.evidence}")
-        return 1 if v.status == "FAIL" else 0
+        try:
+            s = Session(Path(args.session))
+            v = verify(Claim(args.text, args.kind, args.anchor), s.load_doc())
+            print(f"{v.status}: {v.evidence}")
+            return 1 if v.status == "FAIL" else 0
+        except (FileNotFoundError, ValueError, pymupdf.FileNotFoundError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
 
     if args.cmd == "serve":
         s = Session(Path(args.session))
