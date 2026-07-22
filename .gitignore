@@ -1,0 +1,19 @@
+# Confidential manuscripts under review, and text derived from them, must never
+# enter the repository. Patterns are root-anchored so the test fixture under
+# tests/fixtures/ is NOT caught.
+
+# Manuscript PDFs (live in repo root)
+/*.pdf
+# Extracted manuscript text
+/*_raw.txt
+/*_plain.txt
+# Per-review outputs (manuscript-derived)
+/review_draft_*.txt
+/editor_response_*.txt
+/index.html
+
+# Env / caches / vendored study code
+.venv/
+__pycache__/
+*.pyc
+*_study/
