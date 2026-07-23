@@ -2,6 +2,9 @@
 name = "refereekit"
 version = "0.1.0"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Tzu-Chi Yen"}]
 dependencies = ["PyMuPDF>=1.24"]
 
 [project.optional-dependencies]
@@ -21,5 +24,5 @@ include = ["refereekit*"]
 testpaths = ["tests"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"

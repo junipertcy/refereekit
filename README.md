@@ -124,3 +124,7 @@ directory (git-ignored). No manuscript text is sent to memory or committed.
 
 ## Test
     .venv/bin/pytest -v
+
+## License
+
+MIT — see [LICENSE](LICENSE).
