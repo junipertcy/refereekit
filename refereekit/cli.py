@@ -138,15 +138,16 @@ def main(argv=None) -> int:
             return 2
 
     if args.cmd == "review":
-        sdir = Path(args.session)
-        db = args.db or str(sdir / "memory.db")
         try:
+            from .llm import RetentionError
+            sdir = Path(args.session)
+            db = args.db or str(sdir / "memory.db")
             if args.venue:
                 sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists
             mem = SQLiteMemoryStore(db) if args.venue else None
             res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
                            style_path=args.style, memory=mem, venue=args.venue)
-        except (FileNotFoundError, ValueError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError) as e:
+        except (FileNotFoundError, ValueError, RetentionError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError, EOFError) as e:
             print(f"review failed: {e}", file=sys.stderr)
             return 2
         print(f"review complete: {res.report_path}, {res.editor_path} ({len(res.flags)} flag(s))")
