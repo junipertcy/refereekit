@@ -4,6 +4,36 @@ from ..verify import verify
 from .. import render
 
 
+def _verdict_gate(session, *, input_fn, output_fn) -> dict:
+    v = {"recommend": input_fn("verdict (recommend)> ").strip(),
+         "venue": input_fn("venue> ").strip(),
+         "major_minor": input_fn("major/minor> ").strip()}
+    session.set_state("verdict", v)
+    return v
+
+
+def _detail_gate(*, input_fn) -> dict:
+    raw = input_fn("section lengths (name=len, comma-sep; blank=default)> ").strip()
+    if not raw:
+        return {}
+    out = {}
+    for pair in raw.split(","):
+        if "=" in pair:
+            k, val = pair.split("=", 1)
+            out[k.strip()] = val.strip()
+    return out
+
+
+def _editor_answers(*, input_fn) -> dict:
+    out = {}
+    while True:
+        k = input_fn("editor-answer key (blank to end)> ").strip()
+        if not k:
+            break
+        out[k] = input_fn(f"  {k}) answer> ").strip()
+    return out
+
+
 def _doc_context(doc, transcript, question, *, max_pages=None) -> str:
     pages = doc.pages if max_pages is None else doc.pages[:max_pages]
     doc_text = "\n".join(f"[page {p.n}]\n{p.text}" for p in pages)
