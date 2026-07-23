@@ -3,27 +3,23 @@ from refereekit.drafts import report, Draft, build_prompt
 from refereekit.llm import FakeBackend
 from refereekit.session import Session
 from refereekit.types import Claim
-from refereekit.ingest import ingest
 
 def _first_real_eq_id(doc):
     """Select first plausible low-numbered equation label, not scan-order-dependent."""
     cands = sorted(int(e.id) for e in doc.equations if e.id.isdigit() and 1 <= int(e.id) <= 12)
     return str(cands[0]) if cands else "1"
 
-def _session_with_pool(tmp_path, real_pdf_path):
+def _session_with_pool(tmp_path, real_doc):
     s = Session.create(tmp_path, "p")
-    s.save_doc(ingest(real_pdf_path))
-    # Use real_doc which has equations from right-margin geometry
-    doc = ingest(real_pdf_path)
-    eq_id = _first_real_eq_id(doc)
+    s.save_doc(real_doc)  # reuse the session-scoped ingested doc; no re-ingest
+    eq_id = _first_real_eq_id(real_doc)
     s.record_claim(Claim("counting identity", "equation", eq_id))
     s.set_state("verdict", {"recommend": "minor"})
     return s
 
-def test_report_keeps_valid_and_flags_invalid(tmp_path, real_pdf_path):
-    s = _session_with_pool(tmp_path, real_pdf_path)
-    doc = ingest(real_pdf_path)
-    eq_id = _first_real_eq_id(doc)
+def test_report_keeps_valid_and_flags_invalid(tmp_path, real_doc):
+    s = _session_with_pool(tmp_path, real_doc)
+    eq_id = _first_real_eq_id(real_doc)
     # canned prose: one in-pool+valid anchor, one out-of-pool
     canned = f"The identity in Eq. ({eq_id}) is correct. However Eq. (99) is unsupported."
     d = report(s, s.get_state("verdict"), {}, backend=FakeBackend(canned), style_path="style/STYLE.md")
@@ -33,14 +29,13 @@ def test_report_keeps_valid_and_flags_invalid(tmp_path, real_pdf_path):
     assert ("equation", "99") in flagged      # out-of-pool AND fails verify -> flagged
     assert ("equation", eq_id) not in flagged   # in pool AND verifies -> kept
 
-def test_prompt_contains_style_and_pool(tmp_path, real_pdf_path):
-    s = _session_with_pool(tmp_path, real_pdf_path)
+def test_prompt_contains_style_and_pool(tmp_path, real_doc):
+    s = _session_with_pool(tmp_path, real_doc)
     seen = {}
     def capture(p): seen["p"] = p; return "ok"
     report(s, s.get_state("verdict"), {}, backend=FakeBackend(capture), style_path="style/STYLE.md")
     assert "The authors may consider" in seen["p"]   # STYLE.md content present
-    doc = ingest(real_pdf_path)
-    eq_id = _first_real_eq_id(doc)
+    eq_id = _first_real_eq_id(real_doc)
     assert eq_id in seen["p"]                         # pool claim anchor present
 
 def test_prompt_contains_citation_format_instruction():
@@ -50,11 +45,10 @@ def test_prompt_contains_citation_format_instruction():
     assert "p. N" in prompt or "p. 16" in prompt       # instruction mentions p. N format
     assert "CITATION FORMAT" in prompt                  # explicit section header
 
-def test_report_flags_failed_reverification(tmp_path, real_pdf_path):
+def test_report_flags_failed_reverification(tmp_path, real_doc):
     """Test that an anchor IN the pool but failing re-verification is flagged."""
     s = Session.create(tmp_path, "p")
-    doc = ingest(real_pdf_path)
-    s.save_doc(doc)
+    s.save_doc(real_doc)
     # Record a claim for equation 99 (NOT in the real_doc)
     # This claim is in the pool, but re-verification will fail
     s.record_claim(Claim("nonexistent identity", "equation", "99"))

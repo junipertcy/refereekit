@@ -159,7 +159,7 @@ flowchart TD
   <section class="pane" id="p3" role="tabpanel">
     <h2>③ The layers &amp; modules — what's built, what's deferred</h2>
     <div class="sub">Value sits in the portable core (<code>refereekit/</code>); the harness is a thin,
-      swappable driver. Solid = built in Phase 1; dashed = deferred to SP-B/C/D. External resources attach via APIs.</div>
+      swappable driver. Solid = built &amp; tested (SP-A + SP-B); dashed = still deferred. External resources attach via APIs.</div>
     <div class="diagram"><pre class="mmd">
 flowchart TB
     subgraph HG["HARNESS GLUE — thin, swappable"]
@@ -169,23 +169,24 @@ flowchart TB
     end
     subgraph PC["PORTABLE CORE — refereekit/"]
       direction TB
-      subgraph BUILT["Phase 1 — built &amp; tested"]
+      subgraph BUILT["Built &amp; tested — SP-A + SP-B"]
         direction LR
         b1["types"]:::core
-        b2["ingest"]:::core
+        b2["ingest<br/>text·fig·eq"]:::core
         b3["verify<br/>PASS/FAIL/FLAG"]:::core
         b4["guard"]:::core
         b5["render"]:::core
         b6["session"]:::core
         b7["cli"]:::core
+        b8["llm<br/>zero-retention"]:::core
+        b9["drafts<br/>report·editor"]:::core
+        b10["memory<br/>read (SQLite)"]:::core
       end
-      subgraph LATER["Deferred — SP-B/C/D"]
+      subgraph LATER["Deferred"]
         direction LR
-        d1["llm<br/>zero-retention"]:::defer
         d2["litsearch"]:::defer
-        d3["memory<br/>MemoryStore port"]:::defer
-        d4["drafts"]:::defer
-        d5["agent loop"]:::defer
+        d3["memory<br/>write · SP-C"]:::defer
+        d5["agent loop · SP-D"]:::defer
       end
     end
     subgraph RES["EXTERNAL RESOURCES"]
@@ -195,9 +196,9 @@ flowchart TB
       memR[("SQLite now /<br/>mem0 later")]:::ext
     end
     HG -->|"drives (thin wiring)"| PC
-    d1 -->|"manuscript OK"| llmR
-    d2 -->|"topics only"| exaR
-    d3 -->|"your notes only"| memR
+    b8 -->|"manuscript OK"| llmR
+    d2 -->|"topics only (deferred)"| exaR
+    b10 -->|"your notes only"| memR
     classDef core fill:#d7efe6,stroke:#0f766e,stroke-width:2px,color:#12312c;
     classDef glue fill:#fbecd6,stroke:#b45309,stroke-width:2px,color:#3a2c12;
     classDef ext fill:#e7ddfb,stroke:#6d28d9,stroke-width:1.5px,color:#2a2140;

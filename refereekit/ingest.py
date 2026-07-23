@@ -1,5 +1,4 @@
 import json, re
-from pathlib import Path
 import fitz  # PyMuPDF
 from .types import Document, Page, Figure, Equation, Section
 

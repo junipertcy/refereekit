@@ -50,11 +50,10 @@ def build_prompt(pool: dict, style: str, section_lengths: dict) -> str:
         "Use no other citation style or format."
     )
 
-def report(session, verdict: dict, section_lengths: dict, *, backend, style_path) -> Draft:
-    pool = build_pool(session)
-    prompt = build_prompt(pool, load_style(style_path), section_lengths)
-    prose = complete(prompt, backend=backend, manuscript_ok=True)
-    doc = session.load_doc()
+def _verify_prose(prose: str, pool: dict, doc) -> Draft:
+    """Extract anchors from generated prose and flag any that are not in the
+    verified pool or fail re-verification. Shared by report() and editor_letter()
+    so the anchor-integrity guarantee has a single source of truth."""
     pool_keys = {(c.kind, c.anchor) for c in pool["claims"]}
     flags = []
     for a in extract_anchors(prose):
@@ -63,6 +62,12 @@ def report(session, verdict: dict, section_lengths: dict, *, backend, style_path
         elif verify(a, doc).status != "PASS":
             flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
     return Draft(text=prose, flags=flags)
+
+def report(session, verdict: dict, section_lengths: dict, *, backend, style_path) -> Draft:
+    pool = build_pool(session)
+    prompt = build_prompt(pool, load_style(style_path), section_lengths)
+    prose = complete(prompt, backend=backend, manuscript_ok=True)
+    return _verify_prose(prose, pool, session.load_doc())
 
 def build_editor_prompt(pool: dict, style: str, answers: dict) -> str:
     ans = "\n".join(f"{k}) {v}" for k, v in answers.items()) or "(no questions)"
@@ -87,12 +92,4 @@ def editor_letter(session, answers: dict, *, backend, style_path) -> Draft:
     pool = build_pool(session)
     prompt = build_editor_prompt(pool, load_style(style_path), answers)
     prose = complete(prompt, backend=backend, manuscript_ok=True)
-    doc = session.load_doc()
-    pool_keys = {(c.kind, c.anchor) for c in pool["claims"]}
-    flags = []
-    for a in extract_anchors(prose):
-        if (a.kind, a.anchor) not in pool_keys:
-            flags.append(Flag(a.anchor, a.kind, "not in verified pool"))
-        elif verify(a, doc).status != "PASS":
-            flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
-    return Draft(text=prose, flags=flags)
+    return _verify_prose(prose, pool, session.load_doc())
