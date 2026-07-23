@@ -5,12 +5,17 @@ from refereekit.session import Session
 from refereekit.types import Claim
 from refereekit.ingest import ingest
 
+def _first_real_eq_id(doc):
+    """Select first plausible low-numbered equation label, not scan-order-dependent."""
+    cands = sorted(int(e.id) for e in doc.equations if e.id.isdigit() and int(e.id) <= 12)
+    return str(cands[0]) if cands else "1"
+
 def _session_with_pool(tmp_path, real_pdf_path):
     s = Session.create(tmp_path, "p")
     s.save_doc(ingest(real_pdf_path))
     # Use real_doc which has equations from right-margin geometry
     doc = ingest(real_pdf_path)
-    eq_id = doc.equations[0].id if doc.equations else "1"  # use first available or fallback
+    eq_id = _first_real_eq_id(doc)
     s.record_claim(Claim("counting identity", "equation", eq_id))
     s.set_state("verdict", {"recommend": "minor"})
     return s
@@ -18,7 +23,7 @@ def _session_with_pool(tmp_path, real_pdf_path):
 def test_report_keeps_valid_and_flags_invalid(tmp_path, real_pdf_path):
     s = _session_with_pool(tmp_path, real_pdf_path)
     doc = ingest(real_pdf_path)
-    eq_id = doc.equations[0].id if doc.equations else "1"
+    eq_id = _first_real_eq_id(doc)
     # canned prose: one in-pool+valid anchor, one out-of-pool
     canned = f"The identity in Eq. ({eq_id}) is correct. However Eq. (99) is unsupported."
     d = report(s, s.get_state("verdict"), {}, backend=FakeBackend(canned), style_path="style/STYLE.md")
@@ -35,7 +40,7 @@ def test_prompt_contains_style_and_pool(tmp_path, real_pdf_path):
     report(s, s.get_state("verdict"), {}, backend=FakeBackend(capture), style_path="style/STYLE.md")
     assert "The authors may consider" in seen["p"]   # STYLE.md content present
     doc = ingest(real_pdf_path)
-    eq_id = doc.equations[0].id if doc.equations else "1"
+    eq_id = _first_real_eq_id(doc)
     assert eq_id in seen["p"]                         # pool claim anchor present
 
 def test_prompt_contains_citation_format_instruction():
