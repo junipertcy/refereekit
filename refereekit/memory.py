@@ -34,8 +34,11 @@ class SQLiteMemoryStore:
             c.execute("INSERT INTO notes (text, venue, kind, created_at) VALUES (?,?,?,?)",
                       (note.text, note.venue, note.kind, ts))
 
-    def recall(self, venue: str) -> list[Note]:
+    def recall(self, venue: str, limit: int = 20) -> list[Note]:
         with sqlite3.connect(self.path) as c:
-            rows = c.execute("SELECT text, venue, kind FROM notes WHERE venue=?",
-                             (venue,)).fetchall()
-        return [Note(text=t, venue=v, kind=k) for (t, v, k) in rows]
+            rows = c.execute(
+                "SELECT text, kind, MAX(created_at) AS ca FROM notes "
+                "WHERE venue=? GROUP BY text ORDER BY ca DESC LIMIT ?",
+                (venue, limit),
+            ).fetchall()
+        return [Note(text=t, venue=venue, kind=k, created_at=ca) for (t, k, ca) in rows]
