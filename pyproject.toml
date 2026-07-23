@@ -11,6 +11,12 @@ llm = ["anthropic>=0.40"]
 [project.scripts]
 refereekit = "refereekit.cli:main"
 
+# Only the refereekit package is installable; top-level style/ and diagrams/
+# are repo assets, not importable packages. Without this, setuptools flat-layout
+# auto-discovery errors on "Multiple top-level packages discovered".
+[tool.setuptools.packages.find]
+include = ["refereekit*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

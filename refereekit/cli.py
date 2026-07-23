@@ -58,7 +58,7 @@ def main(argv=None) -> int:
     prv.add_argument("--session", required=True)
     prv.add_argument("--venue")
     prv.add_argument("--db")
-    prv.add_argument("--style", default="style/STYLE.md")
+    prv.add_argument("--style", default=None)
 
     args = ap.parse_args(argv)
 
@@ -145,8 +145,11 @@ def main(argv=None) -> int:
             if args.venue:
                 sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists
             mem = SQLiteMemoryStore(db) if args.venue else None
+            # Style path: --style arg > REFEREEKIT_STYLE env > default (same as draft/editor).
+            # Use the location-anchored default so `review` works from any cwd, not just repo root.
+            style_path = args.style or os.environ.get("REFEREEKIT_STYLE") or str(_DEFAULT_STYLE)
             res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
-                           style_path=args.style, memory=mem, venue=args.venue)
+                           style_path=style_path, memory=mem, venue=args.venue)
         except (FileNotFoundError, ValueError, RetentionError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError, EOFError) as e:
             print(f"review failed: {e}", file=sys.stderr)
             return 2

@@ -13,7 +13,7 @@ The distilled `style/STYLE.md` voice guide is committable; raw reports are never
 committed or sent to any service.
 
 ## Install
-    python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+    python -m venv .venv && .venv/bin/pip install -e ".[dev,llm]"
 
 ## Use
 

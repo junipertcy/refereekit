@@ -150,16 +150,16 @@ flowchart TD
     classDef core fill:#d7efe6,stroke:#0f766e,stroke-width:2px,color:#12312c;
     classDef human fill:#fbd9e0,stroke:#be123c,stroke-width:2.5px,color:#3d1620;
     </pre></div>
-    <div class="note">Phase 1 (built) ships the deterministic tools — <code>ingest</code>, <code>verify</code>,
-      <code>render</code>, <code>session</code>, <code>cli</code> — with the harness driving the LLM stages.
-      Drafting (4, 6) and cross-paper memory arrive in later phases.</div>
+    <div class="note">The deterministic tools — <code>ingest</code>, <code>verify</code>,
+      <code>render</code>, <code>session</code>, <code>cli</code> — anchor the flow; drafting (4, 6), cross-paper
+      memory, and the standalone <code>review</code> loop are built on top.</div>
   </section>
 
   <!-- 3 -->
   <section class="pane" id="p3" role="tabpanel">
     <h2>③ The layers &amp; modules — what's built, what's deferred</h2>
     <div class="sub">Value sits in the portable core (<code>refereekit/</code>); the harness is a thin,
-      swappable driver. Solid = built &amp; tested (SP-A + SP-B); dashed = still deferred. External resources attach via APIs.</div>
+      swappable driver. Solid = built &amp; tested (SP-A → SP-D); dashed = still deferred. External resources attach via APIs.</div>
     <div class="diagram"><pre class="mmd">
 flowchart TB
     subgraph HG["HARNESS GLUE — thin, swappable"]
@@ -169,7 +169,7 @@ flowchart TB
     end
     subgraph PC["PORTABLE CORE — refereekit/"]
       direction TB
-      subgraph BUILT["Built &amp; tested — SP-A + SP-B"]
+      subgraph BUILT["Built &amp; tested — SP-A → SP-D"]
         direction LR
         b1["types"]:::core
         b2["ingest<br/>text·fig·eq"]:::core
@@ -180,13 +180,12 @@ flowchart TB
         b7["cli"]:::core
         b8["llm<br/>zero-retention"]:::core
         b9["drafts<br/>report·editor"]:::core
-        b10["memory<br/>read (SQLite)"]:::core
+        b10["memory<br/>read + write (SQLite)"]:::core
+        b11["agent loop<br/>review"]:::core
       end
       subgraph LATER["Deferred"]
         direction LR
         d2["litsearch"]:::defer
-        d3["memory<br/>write · SP-C"]:::defer
-        d5["agent loop · SP-D"]:::defer
       end
     end
     subgraph RES["EXTERNAL RESOURCES"]
@@ -224,7 +223,7 @@ flowchart LR
     classDef human fill:#fbd9e0,stroke:#be123c,stroke-width:2.5px,color:#3d1620;
     </pre></div>
     <div class="note">Memory speeds up <i>style</i>, never <i>facts</i>: the agent re-reads the paper each time.
-      Real errors this caught in practice — "error bars already exist", "Fig. 7 is shallow", a broken code path.</div>
+      The kinds of errors this catches — a miscited page number, a figure or equation that doesn't exist, a claim the text doesn't support.</div>
   </section>
 
   <!-- 5 -->
@@ -290,8 +289,8 @@ sequenceDiagram
         <p><b>SP-A → B → C → D.</b> The runnable deterministic core ships first (built); drafting, cross-paper
           memory, and the fully-standalone embedded agent loop follow — the highest-effort piece deferred last.</p></div>
     </div>
-    <div class="note">Status: <b>SP-A (Phase 1) is built, tested, and merged.</b> SP-B/C/D remain as future
-      spec → plan → build cycles.</div>
+    <div class="note">Status: <b>SP-A → SP-D are all built, tested, and merged.</b> Literature search (litsearch)
+      remains a future spec → plan → build cycle.</div>
   </section>
 </main>
 

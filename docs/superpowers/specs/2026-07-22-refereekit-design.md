@@ -194,11 +194,10 @@ time; (4) two human gates, resumable via state.json; (5) MemoryStore port + adap
 - `analyze.py`, `count_para*.py`, `locate*.py`, `para_full.py` → seed `ingest`.
 - `verify_all.py`, `verify2.py`, `verify3.py` → seed `verify`.
 - The session's MathJax auto-reload Q&A page → seed `render`.
-- `/Users/tzuchi/Documents/Workspace/reviews/writing_examples/` (5 past reviews) →
-  the `style/` corpus and the `drafts` voice templates. (Per-review outputs are
-  never committed and are not reused as assets.)
+- A local corpus of the referee's past reviews (`~/reviews/writing_examples/`, 5 past
+  reviews) → the `style/` corpus and the `drafts` voice templates. (Per-review outputs
+  are never committed and are not reused as assets.)
 
-Note: the helper scripts above contain a real manuscript's submission ID in strings
-and comments; they must be sanitized (IDs/text removed) before being adapted into the
-package, and are themselves git-ignored until then.
+Note: the helper scripts above are one-off exploration tooling; they are git-ignored
+and are re-implemented cleanly inside the package rather than committed as-is.
 - `diagrams/` → updated in the final step.

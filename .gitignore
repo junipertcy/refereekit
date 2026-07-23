@@ -20,8 +20,8 @@ __pycache__/
 *_study/
 .superpowers/
 
-# Root-level exploration scripts (one-off tooling superseded by refereekit package)
-# These scripts reference confidential manuscript IDs and must never be committed.
+# Root-level exploration scripts (one-off tooling superseded by refereekit package).
+# Never committed.
 /analyze.py
 /audit.py
 /by_section.py

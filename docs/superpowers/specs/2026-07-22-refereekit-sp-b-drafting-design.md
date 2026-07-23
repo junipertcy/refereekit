@@ -158,9 +158,9 @@ Manuscript text flows only into `llm` (zero-retention). `memory` and any
 ## 9. Reused assets
 
 - SP-A modules (`types`, `verify`, `session`, `ingest`, `render`) — consumed as-is.
-- `/Users/tzuchi/Documents/Workspace/reviews/writing_examples/` (5 past reports) —
-  the *source* for distilling `STYLE.md`, read once during authoring; **never sent
-  to the LLM and never committed**.
+- A local corpus of the referee's past reports (`~/reviews/writing_examples/`, 5 past
+  reports) — the *source* for distilling `STYLE.md`, read once during authoring; **never
+  sent to the LLM and never committed**.
 - The session's `state.json` + recorded Q&A answers — the verified-claim pool.
 
 ## 10. Follow-through
