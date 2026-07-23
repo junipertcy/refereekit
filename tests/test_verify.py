@@ -9,8 +9,9 @@ def test_quote_on_wrong_page_fails(sample_doc):
     v = verify(Claim("prescribed degree-size sequences", "quote", "99"), sample_doc)
     assert v.status == "FAIL"
 
-def test_existing_equation_passes(sample_doc):
-    v = verify(Claim("counting identity", "equation", "3"), sample_doc)
+def test_existing_equation_passes(real_doc):
+    # use real_doc which has equations extracted from right margin geometry
+    v = verify(Claim("counting identity", "equation", "1"), real_doc)
     assert v.status == "PASS"
 
 def test_nonexistent_equation_fails(sample_doc):

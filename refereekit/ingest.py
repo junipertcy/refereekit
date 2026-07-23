@@ -3,10 +3,26 @@ from pathlib import Path
 import fitz  # PyMuPDF
 from .types import Document, Page, Figure, Equation, Section
 
-_EQ_LABEL = re.compile(r"\((\d{1,3})\)\s*$")
+_BARE_INT = re.compile(r"\d{1,3}")
 _FIG_LINE = re.compile(r"^\s*FIG\.\s*(\d+)\.\s*(.*)$")
 _SEC_NUM = re.compile(r"^\s*(\d+(?:\.\d+)?)\.?\s+([A-Z][A-Za-z].{2,60})$")
 _SEC_ROMAN = re.compile(r"^\s*(I{1,3}|IV|V|VI{0,3}|IX|X)\.\s+([A-Z].{2,60})$")
+
+def _extract_equation_numbers(page) -> list[Equation]:
+    eqs, seen = [], set()
+    W = page.rect.width
+    pno = page.number + 1
+    for b in page.get_text("dict")["blocks"]:
+        if b.get("type") != 0:
+            continue
+        for line in b["lines"]:
+            for span in line["spans"]:
+                t = span["text"].strip()
+                if _BARE_INT.fullmatch(t) and span["bbox"][0] > 0.85 * W:
+                    if t not in seen:
+                        seen.add(t)
+                        eqs.append(Equation(id=t, page=pno, body=""))
+    return eqs
 
 def _extract_figures(page_text: str, page_no: int) -> list[Figure]:
     figs, seen = [], set()
@@ -35,10 +51,7 @@ def ingest(pdf_path) -> Document:
         text = pg.get_text()
         total_text += text
         pages.append(Page(n=i + 1, text=text, blocks=[]))
-        for line in text.splitlines():
-            m = _EQ_LABEL.search(line.strip())
-            if m:
-                equations.append(Equation(id=m.group(1), page=i + 1, body=line.strip()))
+        equations.extend(_extract_equation_numbers(pg))
         figures.extend(_extract_figures(text, i + 1))
         sections.extend(_extract_sections(text, i + 1))
     if not total_text.strip():
@@ -48,6 +61,11 @@ def ingest(pdf_path) -> Document:
         if f.id not in _seen:
             _seen.add(f.id); _f.append(f)
     figures = _f
+    _eq_seen = set(); _eq = []
+    for e in equations:
+        if e.id not in _eq_seen:
+            _eq_seen.add(e.id); _eq.append(e)
+    equations = _eq
     return Document(pages=pages, figures=figures, equations=equations, sections=sections)
 
 def to_json(d: Document) -> str:
