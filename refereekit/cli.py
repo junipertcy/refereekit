@@ -141,6 +141,8 @@ def main(argv=None) -> int:
         sdir = Path(args.session)
         db = args.db or str(sdir / "memory.db")
         try:
+            if args.venue:
+                sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists
             mem = SQLiteMemoryStore(db) if args.venue else None
             res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
                            style_path=args.style, memory=mem, venue=args.venue)
