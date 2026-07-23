@@ -46,5 +46,12 @@ verification (not in verified pool or failed re-verification against the documen
 `zero_retention=True`. The `style/STYLE.md` voice guide is distilled and committable;
 raw manuscript text and reports are never committed.
 
+## Extraction limits
+
+- **Figures:** Reliably extracted from caption lines (handles "FIG." and "Figure" prefixes).
+- **Equation numbers:** Best-effort extraction via right-margin geometry. Equation **bodies are not reconstructed** — PDF math rendering is lossy (bitmaps/glyphs, not LaTeX); source is unavailable post-compile. Noisy IDs remain possible on papers with complex multi-column layouts.
+- **Sections:** Best-effort heading detection. Papers with non-standard heading styles (e.g., no caps/roman numerals in the text layer) may surface few or no sections.
+- **Most reliable path:** Quote/page verification remains the robust anchor for review workflows.
+
 ## Test
     .venv/bin/pytest -v
