@@ -2,6 +2,8 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from typing import Protocol
+from datetime import datetime, timezone
+from .guard import assert_no_manuscript
 
 @dataclass
 class Note:
@@ -12,7 +14,7 @@ class Note:
 
 class MemoryStore(Protocol):
     def recall(self, venue: str) -> list["Note"]: ...
-    def store(self, note: "Note") -> None: ...
+    def store(self, note: "Note", doc, *, created_at: str | None = None) -> None: ...
 
 class SQLiteMemoryStore:
     def __init__(self, path: str | os.PathLike):
@@ -23,10 +25,14 @@ class SQLiteMemoryStore:
             if "created_at" not in cols:
                 c.execute("ALTER TABLE notes ADD COLUMN created_at TEXT")
 
-    def store(self, note: Note) -> None:
+    def store(self, note: Note, doc, *, created_at: str | None = None) -> None:
+        if doc is None:
+            raise ValueError("store requires the session Document")
+        assert_no_manuscript(note.text, doc)
+        ts = created_at or note.created_at or datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.path) as c:
-            c.execute("INSERT INTO notes (text, venue, kind) VALUES (?,?,?)",
-                      (note.text, note.venue, note.kind))
+            c.execute("INSERT INTO notes (text, venue, kind, created_at) VALUES (?,?,?,?)",
+                      (note.text, note.venue, note.kind, ts))
 
     def recall(self, venue: str) -> list[Note]:
         with sqlite3.connect(self.path) as c:
