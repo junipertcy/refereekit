@@ -16,6 +16,7 @@
 .venv/
 __pycache__/
 *.pyc
+# Locally-cloned reference code studied during a review (never committed)
 *_study/
 .superpowers/
 
