@@ -1,4 +1,3 @@
-import os
 from refereekit.cli import main
 
 def test_cli_review_end_to_end_offline(tmp_path, real_pdf_path, monkeypatch):
@@ -31,3 +30,15 @@ def test_cli_review_not_zero_retention_exits_2(tmp_path, monkeypatch, capsys):
     rc = main(["review", "tests/fixtures/real_paper.pdf", "--session", str(tmp_path / "s")])
     assert rc == 2
     assert "retention" in capsys.readouterr().err.lower()
+
+def test_cli_review_with_venue_fresh_session(tmp_path, real_pdf_path, monkeypatch):
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Answer about the paper. See p. 1.")
+    script = iter(["a question?", "", "minor revision", "PRX", "minor", "", ""])
+    from refereekit.agent import run_review
+    monkeypatch.setitem(run_review.__kwdefaults__, "input_fn", lambda _="": next(script))
+    sess = tmp_path / "fresh"   # does NOT exist yet
+    rc = main(["review", str(real_pdf_path), "--session", str(sess), "--venue", "PRX"])
+    assert rc == 0
+    assert (sess / "report.txt").exists() and (sess / "editor.txt").exists()
+    assert (sess / "memory.db").exists()   # --venue created the store in the fresh dir
