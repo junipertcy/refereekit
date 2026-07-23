@@ -76,6 +76,42 @@ referee — no LLM auto-distillation, no automatic extraction from manuscripts.
 **Note kinds:** `verdict`, `quote`, `claim`, `method`, `style` — the `kind` field is
 stored but not used for filtering in this phase.
 
+### Phase 4 (SP-D): Standalone review
+
+A scripted orchestrator that runs a fixed review pipeline from PDF to final report/letter,
+with no external harness coordination. The pipeline runs entirely offline in fake mode, or
+with a zero-retention LLM for real reviews.
+
+**Fixed pipeline:**
+1. **Ingest** — extract pages, equations, claims from the PDF
+2. **Summarize** — generate a referee summary of the paper
+3. **Interactive Q&A** — multi-turn question loop; answers are verified against the
+   document and recorded into the claim pool
+4. **Verdict gate** — prompt for recommendation, venue, major/minor (saved to session state)
+5. **Draft report** — generate referee report using the verified claim pool and verdict
+6. **Detail gate** — prompt for optional section length overrides
+7. **Editor letter** — generate editor response letter with optional editor-question answers
+
+**Command:**
+    refereekit review <pdf> --session <dir> [--venue <venue>]
+
+**Example (offline, no network):**
+    export REFEREEKIT_FAKE=1
+    export REFEREEKIT_FAKE_TEXT="Answer. See p. 1."
+    printf 'q?\n\nminor\nPRX\nminor\n\n\n' | \
+      refereekit review tests/fixtures/real_paper.pdf --session /tmp/review-session --venue PRX
+
+**Real use (zero-retention LLM):**
+    export REFEREEKIT_ZERO_RETENTION=1
+    export REFEREEKIT_MODEL=claude-opus-4-8
+    refereekit review paper.pdf --session ./work/paperA --venue PRX
+
+**Output:** Writes `<session>/report.txt`, `<session>/editor.txt`, and `<session>/index.html`.
+
+**Confidentiality note:** Manuscript text goes **only** to the zero-retention LLM backend
+during `review`. The session transcript, report, and editor letter remain in the session
+directory (git-ignored). No manuscript text is sent to memory or committed.
+
 ## Extraction limits
 
 - **Figures:** Reliably extracted from caption lines (handles "FIG." and "Figure" prefixes).
