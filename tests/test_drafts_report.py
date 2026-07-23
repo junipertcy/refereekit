@@ -61,3 +61,41 @@ def test_report_flags_failed_reverification(tmp_path, real_doc):
     eq99_flags = [f for f in d.flags if f.kind == "equation" and f.anchor == "99"]
     assert len(eq99_flags) == 1
     assert "failed" in eq99_flags[0].reason.lower() or "verify" in eq99_flags[0].reason.lower()
+
+def test_report_with_memory_recall(tmp_path, real_doc):
+    """Test that recalled notes appear in the draft prompt."""
+    from refereekit.memory import SQLiteMemoryStore, Note
+    from datetime import datetime, timezone
+
+    s = _session_with_pool(tmp_path, real_doc)
+    db_path = tmp_path / "test_mem.db"
+    store = SQLiteMemoryStore(db_path)
+
+    # Store a note for venue PRX with explicit created_at
+    note_text = "PRX style: lean accept-after-major"
+    created_at = datetime.now(timezone.utc).isoformat()
+    store.store(Note(note_text, "PRX", "style", created_at=created_at), real_doc, created_at=created_at)
+
+    # Capture the prompt
+    seen = {}
+    def capture(p): seen["p"] = p; return "draft text"
+
+    d = report(s, s.get_state("verdict"), {},
+               backend=FakeBackend(capture),
+               style_path="style/STYLE.md",
+               memory=store,
+               venue="PRX")
+
+    # Assert the recalled note text appears in the prompt
+    assert note_text in seen["p"]
+    assert "=== PRIOR NOTES" in seen["p"]
+    assert isinstance(d, Draft)
+
+def test_report_without_memory_still_works(tmp_path, real_doc):
+    """Test that report() without memory/venue still works (backwards compat)."""
+    s = _session_with_pool(tmp_path, real_doc)
+    d = report(s, s.get_state("verdict"), {},
+               backend=FakeBackend("draft text"),
+               style_path="style/STYLE.md")
+    assert isinstance(d, Draft)
+    assert d.text == "draft text"

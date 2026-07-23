@@ -38,10 +38,19 @@ def is_verbatim_fragment(text: str, doc: Document, *, n: int = 8) -> bool:
     return False
 
 def assert_no_manuscript(text: str, doc: Document, *, n: int = 8, max_overlap: int = 1) -> None:
+    # Fail-closed: if doc has no extractable text, reject (defense-in-depth)
+    if not doc.pages or all(not p.text.strip() for p in doc.pages):
+        raise ManuscriptLeakError("cannot verify against an empty document")
+
+    # Primary gate: embedded-fragment check catches single contiguous runs (long text)
+    words = re.findall(r"\w+", text)
     if is_verbatim_fragment(text, doc, n=n):
-        raise ManuscriptLeakError(
-            f"input is a verbatim manuscript fragment (<{n} words)"
-        )
+        if len(words) < n:
+            raise ManuscriptLeakError("input is a verbatim manuscript fragment (short verbatim manuscript fragment)")
+        else:
+            raise ManuscriptLeakError("input is a verbatim manuscript fragment (note contains a verbatim manuscript fragment)")
+    # Secondary net: scattered n-gram overlap (belt-and-suspenders; the above already
+    # rejects any single contiguous n-word run for long text)
     q = _ngrams(text, n)
     if not q:
         return

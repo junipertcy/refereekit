@@ -1,5 +1,5 @@
 # refereekit/cli.py
-import argparse, sys, os
+import argparse, sys, os, sqlite3
 from pathlib import Path
 import pymupdf
 from .ingest import ingest
@@ -117,13 +117,17 @@ def main(argv=None) -> int:
         try:
             doc = s.load_doc()
             SQLiteMemoryStore(db).store(Note(args.text, args.venue, args.kind), doc)
-        except (FileNotFoundError, ValueError, ManuscriptLeakError) as e:
+        except (FileNotFoundError, ValueError, sqlite3.OperationalError, ManuscriptLeakError) as e:
             print(f"mem-store failed: {e}", file=sys.stderr); return 2
         print(f"stored note for {args.venue}"); return 0
 
     if args.cmd == "mem-recall":
-        notes = SQLiteMemoryStore(args.db).recall(args.venue, args.limit)
-        for nt in notes: print(f"[{nt.venue}/{nt.kind}] {nt.text}")
-        return 0
+        try:
+            notes = SQLiteMemoryStore(args.db).recall(args.venue, args.limit)
+            for nt in notes: print(f"[{nt.venue}/{nt.kind}] {nt.text}")
+            return 0
+        except (FileNotFoundError, ValueError, sqlite3.OperationalError, ManuscriptLeakError) as e:
+            print(f"mem-recall failed: {e}", file=sys.stderr)
+            return 2
 
     return 2

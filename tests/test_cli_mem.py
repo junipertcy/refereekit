@@ -23,3 +23,19 @@ def test_mem_store_rejects_manuscript(tmp_path, real_pdf_path, capsys):
                "--kind", "quote", "--text", "prescribed degree-size sequences", "--db", db])
     assert rc == 2
     assert "manuscript" in capsys.readouterr().err.lower()
+
+def test_mem_recall_bad_db_returns_2(tmp_path, capsys):
+    """mem-recall with bad --db path returns 2, not a traceback."""
+    rc = main(["mem-recall", "--venue", "PRX", "--db", str(tmp_path / "nope" / "x.db")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "mem-recall failed:" in err
+
+def test_mem_store_bad_db_returns_2(tmp_path, real_pdf_path, capsys):
+    """mem-store with bad --db path returns 2, not a traceback."""
+    s = _sess(tmp_path, real_pdf_path)
+    rc = main(["mem-store", "--session", str(s.dir), "--venue", "PRX",
+               "--kind", "style", "--text", "valid note", "--db", str(tmp_path / "nope" / "x.db")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "mem-store failed:" in err

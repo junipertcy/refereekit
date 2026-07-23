@@ -53,9 +53,10 @@ manuscript-verbatim text can never be stored. All notes are explicitly written b
 referee — no LLM auto-distillation, no automatic extraction from manuscripts.
 
 **Guarded write:**
-- `mem-store` requires a session document to validate against. If the input text is a
-  verbatim fragment from the manuscript (≥8-word n-gram match), the write is rejected
-  (exit 2, printed error) and nothing is stored.
+- `mem-store` requires a session document to validate against. The write is rejected
+  (exit 2, printed error) and nothing is stored if the input text:
+  - Contains a verbatim manuscript fragment (short <8-word exact match, or ≥8-word
+    contiguous run, or ≥8-word scattered n-gram overlap)
 - This fail-closed design ensures manuscript confidentiality: text under review cannot
   leak into memory.
 
@@ -69,8 +70,7 @@ referee — no LLM auto-distillation, no automatic extraction from manuscripts.
     refereekit mem-recall --venue PRX --db ./work/memory.db
 
 **Deduplication and recency:**
-- Recall deduplicates by normalized text (case-folded, whitespace-collapsed).
-- Returns the most recent note for each unique text, up to 20 notes (configurable).
+- Recall returns distinct notes (exact-text dedup), newest-first, capped at 20 notes (configurable).
 - Sorted by `created_at` descending.
 
 **Note kinds:** `verdict`, `quote`, `claim`, `method`, `style` — the `kind` field is
