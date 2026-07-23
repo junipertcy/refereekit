@@ -6,6 +6,10 @@
 **Builds on:** SP-A + SP-B + ingest-hardening + verify-coherence (all merged to
 `master`). Extends `refereekit/memory.py` and `refereekit/guard.py`.
 
+> **Implementation note (historical doc):** The memory commands shipped hyphenated as
+> `refereekit mem-store` / `mem-recall`, not the `mem store` / `mem recall` shown
+> below. See `README.md` for the authoritative, shipped CLI.
+
 ---
 
 ## 1. Purpose

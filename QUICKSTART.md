@@ -19,8 +19,9 @@ refereekit or the tests:
 That's it. refereekit walks you through the whole review:
 
 1. **Summarizes** the paper for you.
-2. **Q&A** — ask it anything about the paper. Every page/equation it cites is
-   checked against the actual PDF; anything it can't verify is flagged, not
+2. **Q&A** — ask it anything about the paper. Every *anchor* it cites — a page or
+   equation number pointing into the PDF — is checked against the actual document;
+   any anchor it can't verify is *flagged* (marked as unconfirmed) rather than
    trusted. Press **Enter on a blank line** to finish asking.
 3. Asks your **verdict** (recommend / venue / major-or-minor).
 4. Asks about **section lengths** (just press Enter to accept defaults).

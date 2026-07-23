@@ -4,6 +4,12 @@
 **Author:** Tzu-Chi Yen (with Claude Code)
 **Status:** Approved design → ready for implementation planning
 
+> **Implementation note (historical doc):** This is the original design spec; a
+> couple of CLI names drifted during the build. The `refereekit lit` literature
+> search was deferred and is not implemented. Memory commands shipped hyphenated as
+> `refereekit mem-recall` / `mem-store` (not the `mem recall` / `mem store` shown
+> below). See `README.md` for the authoritative, shipped CLI.
+
 ---
 
 ## 1. Purpose
