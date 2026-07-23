@@ -1,7 +1,50 @@
+from dataclasses import dataclass, field
+from pathlib import Path
 from ..llm import complete
 from ..drafts import extract_anchors
 from ..verify import verify
 from .. import render
+from ..ingest import ingest
+from ..session import Session
+from .. import drafts
+
+
+@dataclass
+class ReviewResult:
+    report_path: Path
+    editor_path: Path
+    flags: list = field(default_factory=list)
+    verdict: dict = field(default_factory=dict)
+
+
+def run_review(pdf_path, *, backend, session_dir, input_fn=input, output_fn=print,
+               style_path="style/STYLE.md", memory=None, venue=None) -> ReviewResult:
+    session_dir = Path(session_dir)
+    session = Session.create(session_dir.parent, session_dir.name)
+    doc = ingest(pdf_path)
+    session.save_doc(doc)
+    # 1. summarize
+    summary = complete(_doc_context(doc, [], "Summarize this paper for a referee."),
+                       backend=backend, manuscript_ok=True)
+    output_fn("SUMMARY:\n" + summary)
+    # 2. Q&A
+    _qa_loop(session, doc, backend=backend, input_fn=input_fn, output_fn=output_fn)
+    # 3. verdict gate
+    verdict = _verdict_gate(session, input_fn=input_fn, output_fn=output_fn)
+    # 4. draft
+    lengths = _detail_gate(input_fn=input_fn)
+    rep = drafts.report(session, verdict, lengths, backend=backend,
+                        style_path=style_path, memory=memory, venue=venue)
+    report_path = session_dir / "report.txt"
+    report_path.write_text(rep.text)
+    # 5-6. editor
+    answers = _editor_answers(input_fn=input_fn)
+    ed = drafts.editor_letter(session, answers, backend=backend,
+                              style_path=style_path, memory=memory, venue=venue)
+    editor_path = session_dir / "editor.txt"
+    editor_path.write_text(ed.text)
+    return ReviewResult(report_path=report_path, editor_path=editor_path,
+                        flags=rep.flags + ed.flags, verdict=verdict)
 
 
 def _verdict_gate(session, *, input_fn, output_fn) -> dict:
