@@ -25,5 +25,5 @@ def verify(claim: Claim, doc: Document) -> Verdict:
         if any(f.id == claim.anchor for f in doc.figures):
             return Verdict("PASS", f"figure ({claim.anchor}) exists")
         return Verdict("FAIL", f"figure ({claim.anchor}) not found")
-    # figure + unknown -> semantic, needs human/LLM
+    # unknown kinds -> semantic, needs human/LLM
     return Verdict("FLAG", f"'{claim.kind}' claim needs human confirmation")
