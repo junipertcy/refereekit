@@ -9,6 +9,7 @@ from .session import Session
 from . import render
 from .memory import SQLiteMemoryStore, Note
 from .guard import ManuscriptLeakError
+from .agent import run_review
 
 # Default style guide path (repo root / style / STYLE.md)
 _DEFAULT_STYLE = Path(__file__).resolve().parent.parent / "style" / "STYLE.md"
@@ -52,6 +53,12 @@ def main(argv=None) -> int:
     pmr = sub.add_parser("mem-recall")
     pmr.add_argument("--venue", required=True); pmr.add_argument("--db", required=True)
     pmr.add_argument("--limit", type=int, default=20)
+    prv = sub.add_parser("review")
+    prv.add_argument("pdf")
+    prv.add_argument("--session", required=True)
+    prv.add_argument("--venue")
+    prv.add_argument("--db")
+    prv.add_argument("--style", default="style/STYLE.md")
 
     args = ap.parse_args(argv)
 
@@ -129,5 +136,18 @@ def main(argv=None) -> int:
         except (FileNotFoundError, ValueError, sqlite3.OperationalError, ManuscriptLeakError) as e:
             print(f"mem-recall failed: {e}", file=sys.stderr)
             return 2
+
+    if args.cmd == "review":
+        sdir = Path(args.session)
+        db = args.db or str(sdir / "memory.db")
+        try:
+            mem = SQLiteMemoryStore(db) if args.venue else None
+            res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
+                           style_path=args.style, memory=mem, venue=args.venue)
+        except (FileNotFoundError, ValueError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError) as e:
+            print(f"review failed: {e}", file=sys.stderr)
+            return 2
+        print(f"review complete: {res.report_path}, {res.editor_path} ({len(res.flags)} flag(s))")
+        return 0
 
     return 2
