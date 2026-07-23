@@ -8,6 +8,7 @@ class Note:
     text: str
     venue: str
     kind: str = "style"
+    created_at: str | None = None
 
 class MemoryStore(Protocol):
     def recall(self, venue: str) -> list["Note"]: ...
@@ -17,7 +18,10 @@ class SQLiteMemoryStore:
     def __init__(self, path: str | os.PathLike):
         self.path = str(path)
         with sqlite3.connect(self.path) as c:
-            c.execute("CREATE TABLE IF NOT EXISTS notes (text TEXT, venue TEXT, kind TEXT)")
+            c.execute("CREATE TABLE IF NOT EXISTS notes (text TEXT, venue TEXT, kind TEXT, created_at TEXT)")
+            cols = {r[1] for r in c.execute("PRAGMA table_info(notes)")}
+            if "created_at" not in cols:
+                c.execute("ALTER TABLE notes ADD COLUMN created_at TEXT")
 
     def store(self, note: Note) -> None:
         with sqlite3.connect(self.path) as c:
