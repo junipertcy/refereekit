@@ -5,31 +5,43 @@ from refereekit.session import Session
 from refereekit.types import Claim
 from refereekit.ingest import ingest
 
-def _session_with_pool(tmp_path, sample_pdf_path):
+def _first_real_eq_id(doc):
+    """Select first plausible low-numbered equation label, not scan-order-dependent."""
+    cands = sorted(int(e.id) for e in doc.equations if e.id.isdigit() and 1 <= int(e.id) <= 12)
+    return str(cands[0]) if cands else "1"
+
+def _session_with_pool(tmp_path, real_pdf_path):
     s = Session.create(tmp_path, "p")
-    s.save_doc(ingest(sample_pdf_path))
-    s.record_claim(Claim("counting identity", "equation", "3"))  # exists in fixture
+    s.save_doc(ingest(real_pdf_path))
+    # Use real_doc which has equations from right-margin geometry
+    doc = ingest(real_pdf_path)
+    eq_id = _first_real_eq_id(doc)
+    s.record_claim(Claim("counting identity", "equation", eq_id))
     s.set_state("verdict", {"recommend": "minor"})
     return s
 
-def test_report_keeps_valid_and_flags_invalid(tmp_path, sample_pdf_path):
-    s = _session_with_pool(tmp_path, sample_pdf_path)
-    # canned prose: one in-pool+valid anchor (Eq 3), one out-of-pool (Eq 9, also absent from PDF)
-    canned = "The identity in Eq. (3) is correct. However Eq. (9) is unsupported."
+def test_report_keeps_valid_and_flags_invalid(tmp_path, real_pdf_path):
+    s = _session_with_pool(tmp_path, real_pdf_path)
+    doc = ingest(real_pdf_path)
+    eq_id = _first_real_eq_id(doc)
+    # canned prose: one in-pool+valid anchor, one out-of-pool
+    canned = f"The identity in Eq. ({eq_id}) is correct. However Eq. (99) is unsupported."
     d = report(s, s.get_state("verdict"), {}, backend=FakeBackend(canned), style_path="style/STYLE.md")
     assert isinstance(d, Draft)
     assert d.text == canned
     flagged = {(f.kind, f.anchor) for f in d.flags}
-    assert ("equation", "9") in flagged      # out-of-pool AND fails verify -> flagged
-    assert ("equation", "3") not in flagged   # in pool AND verifies -> kept
+    assert ("equation", "99") in flagged      # out-of-pool AND fails verify -> flagged
+    assert ("equation", eq_id) not in flagged   # in pool AND verifies -> kept
 
-def test_prompt_contains_style_and_pool(tmp_path, sample_pdf_path):
-    s = _session_with_pool(tmp_path, sample_pdf_path)
+def test_prompt_contains_style_and_pool(tmp_path, real_pdf_path):
+    s = _session_with_pool(tmp_path, real_pdf_path)
     seen = {}
     def capture(p): seen["p"] = p; return "ok"
     report(s, s.get_state("verdict"), {}, backend=FakeBackend(capture), style_path="style/STYLE.md")
     assert "The authors may consider" in seen["p"]   # STYLE.md content present
-    assert "3" in seen["p"]                            # pool claim anchor present
+    doc = ingest(real_pdf_path)
+    eq_id = _first_real_eq_id(doc)
+    assert eq_id in seen["p"]                         # pool claim anchor present
 
 def test_prompt_contains_citation_format_instruction():
     pool = {"claims": [], "verdict": {}}
@@ -38,19 +50,20 @@ def test_prompt_contains_citation_format_instruction():
     assert "p. N" in prompt or "p. 16" in prompt       # instruction mentions p. N format
     assert "CITATION FORMAT" in prompt                  # explicit section header
 
-def test_report_flags_failed_reverification(tmp_path, sample_pdf_path):
+def test_report_flags_failed_reverification(tmp_path, real_pdf_path):
     """Test that an anchor IN the pool but failing re-verification is flagged."""
     s = Session.create(tmp_path, "p")
-    s.save_doc(ingest(sample_pdf_path))
-    # Record a claim for equation 7 (NOT in the fixture, which has only 1,2,3)
+    doc = ingest(real_pdf_path)
+    s.save_doc(doc)
+    # Record a claim for equation 99 (NOT in the real_doc)
     # This claim is in the pool, but re-verification will fail
-    s.record_claim(Claim("nonexistent identity", "equation", "7"))
-    canned = "The draft cites Eq. (7)."
+    s.record_claim(Claim("nonexistent identity", "equation", "99"))
+    canned = "The draft cites Eq. (99)."
     d = report(s, {}, {}, backend=FakeBackend(canned), style_path="style/STYLE.md")
-    # Eq. (7) should be flagged because it's in pool but fails re-verification
+    # Eq. (99) should be flagged because it's in pool but fails re-verification
     flagged = {(f.kind, f.anchor) for f in d.flags}
-    assert ("equation", "7") in flagged
+    assert ("equation", "99") in flagged
     # Check that the reason mentions failed verification (not "not in pool")
-    eq7_flags = [f for f in d.flags if f.kind == "equation" and f.anchor == "7"]
-    assert len(eq7_flags) == 1
-    assert "failed" in eq7_flags[0].reason.lower() or "verify" in eq7_flags[0].reason.lower()
+    eq99_flags = [f for f in d.flags if f.kind == "equation" and f.anchor == "99"]
+    assert len(eq99_flags) == 1
+    assert "failed" in eq99_flags[0].reason.lower() or "verify" in eq99_flags[0].reason.lower()

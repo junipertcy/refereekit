@@ -41,6 +41,17 @@ author's own public arXiv paper — zero confidentiality risk). Harness-side dri
 - This should land **before SP-C** — memory/drafting quality depends on a pool that
   actually contains the paper's equations and figures.
 
+## Resolved by ingest-hardening (2026-07-22)
+
+Branch `build/refereekit-ingest-hardening` addressed the extraction gaps:
+- **Figures:** now reliable — detects exactly figures 1–4 on the real paper (handles both "FIG." and "Figure" prefixes); retired the dead caption loop.
+- **Equation numbers:** best-effort via right-margin geometry — detects 21 equation numbers on the real paper (vs. 0 before). Note: **equation bodies not reconstructed** — PDF math rendering is lossy; LaTeX source is unavailable post-compile; noise IDs remain possible on papers with complex layouts.
+- **Sections:** best-effort heading detection — this paper's headings don't surface as caps/roman in the PDF text layer, returning 0 sections by design (not a regression). Works on PDFs with recognizable heading structure.
+- **Inline marker guard:** proven excludes text like "(1) first item" — the spec's fact-guarantee concern is resolved; equation detection uses right-margin bounding-box filtering.
+- **Real-paper fixture:** `tests/fixtures/real_paper.pdf` committed as a regression guard with ground-truth assertions.
+
+**Extraction limits** (see README): quote/page verification remains the most reliable path; figure detection is robust; equation and section extraction are best-effort due to PDF variability.
+
 ## Unchanged carry-overs
 - SP-C: cross-paper memory write/recall (+ guard-threshold hardening before `store`
   accepts free text).
