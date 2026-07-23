@@ -2,6 +2,9 @@
 
 Standalone, harness-portable toolkit that automates a paper-review workflow.
 
+> **New here?** See **[QUICKSTART.md](QUICKSTART.md)** — the one-command way to review a
+> paper. This README documents every individual tool and the build phases behind them.
+
 ## Confidentiality
 Confidential manuscripts and text derived from them are never committed. The only
 committable PDF is the test fixture under `tests/fixtures/`. Manuscript text is
