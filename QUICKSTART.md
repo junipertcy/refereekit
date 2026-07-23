@@ -4,6 +4,9 @@ Review a paper, end to end, with one command.
 
 ## 1. Install (once)
 
+The repo ships without a virtual environment, so create one before running
+refereekit or the tests:
+
     python -m venv .venv && .venv/bin/pip install -e ".[dev,llm]"
 
 ## 2. Review a paper
