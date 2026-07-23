@@ -31,14 +31,23 @@ class Draft:
     text: str
     flags: list = field(default_factory=list)
 
-def build_prompt(pool: dict, style: str, section_lengths: dict) -> str:
+def build_prompt(pool: dict, style: str, section_lengths: dict, prior_notes: list[str] = None) -> str:
     claim_lines = "\n".join(
         f"- {c.kind} ({c.anchor}): {c.text}" for c in pool["claims"]
     ) or "(no verified claims available)"
     lengths = ", ".join(f"{k}={v}" for k, v in section_lengths.items()) or "default"
+
+    prior_section = ""
+    if prior_notes:
+        prior_section = (
+            "=== PRIOR NOTES (your style/verdict patterns for this venue) ===\n" +
+            "\n".join(f"- {n}" for n in prior_notes) + "\n\n"
+        )
+
     return (
         "Write a referee report in the voice described below.\n\n"
         f"=== VOICE GUIDE ===\n{style}\n\n"
+        f"{prior_section}"
         f"=== VERDICT ===\n{pool['verdict']}\n\n"
         f"=== VERIFIED CLAIMS (cite ONLY these anchors) ===\n{claim_lines}\n\n"
         f"=== SECTION LENGTHS ===\n{lengths}\n\n"
@@ -63,21 +72,34 @@ def _verify_prose(prose: str, pool: dict, doc) -> Draft:
             flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
     return Draft(text=prose, flags=flags)
 
-def report(session, verdict: dict, section_lengths: dict, *, backend, style_path) -> Draft:
+def report(session, verdict: dict, section_lengths: dict, *, backend, style_path, memory=None, venue=None) -> Draft:
     pool = build_pool(session)
-    prompt = build_prompt(pool, load_style(style_path), section_lengths)
+    prior_notes = None
+    if memory is not None and venue is not None:
+        notes = memory.recall(venue)
+        prior_notes = [n.text for n in notes]
+    prompt = build_prompt(pool, load_style(style_path), section_lengths, prior_notes)
     prose = complete(prompt, backend=backend, manuscript_ok=True)
     return _verify_prose(prose, pool, session.load_doc())
 
-def build_editor_prompt(pool: dict, style: str, answers: dict) -> str:
+def build_editor_prompt(pool: dict, style: str, answers: dict, prior_notes: list[str] = None) -> str:
     ans = "\n".join(f"{k}) {v}" for k, v in answers.items()) or "(no questions)"
     claim_lines = "\n".join(
         f"- {c.kind} ({c.anchor}): {c.text}" for c in pool["claims"]
     ) or "(no verified claims available)"
+
+    prior_section = ""
+    if prior_notes:
+        prior_section = (
+            "=== PRIOR NOTES (your style/verdict patterns for this venue) ===\n" +
+            "\n".join(f"- {n}" for n in prior_notes) + "\n\n"
+        )
+
     return (
         "Write a SHORT editor-response letter in the voice described below. "
         "Answer each item with a lead verdict word, in a/b/c/d structure.\n\n"
         f"=== VOICE GUIDE ===\n{style}\n\n"
+        f"{prior_section}"
         f"=== EDITOR QUESTIONS / YOUR ANSWERS ===\n{ans}\n\n"
         f"=== VERIFIED CLAIMS (cite ONLY these anchors) ===\n{claim_lines}\n\n"
         "Cite page/equation anchors only if they appear in the verified claims above.\n\n"
@@ -88,8 +110,12 @@ def build_editor_prompt(pool: dict, style: str, answers: dict) -> str:
         "Use no other citation style or format."
     )
 
-def editor_letter(session, answers: dict, *, backend, style_path) -> Draft:
+def editor_letter(session, answers: dict, *, backend, style_path, memory=None, venue=None) -> Draft:
     pool = build_pool(session)
-    prompt = build_editor_prompt(pool, load_style(style_path), answers)
+    prior_notes = None
+    if memory is not None and venue is not None:
+        notes = memory.recall(venue)
+        prior_notes = [n.text for n in notes]
+    prompt = build_editor_prompt(pool, load_style(style_path), answers, prior_notes)
     prose = complete(prompt, backend=backend, manuscript_ok=True)
     return _verify_prose(prose, pool, session.load_doc())

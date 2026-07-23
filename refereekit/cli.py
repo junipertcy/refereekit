@@ -1,5 +1,5 @@
 # refereekit/cli.py
-import argparse, sys, os
+import argparse, sys, os, sqlite3
 from pathlib import Path
 import pymupdf
 from .ingest import ingest
@@ -7,6 +7,8 @@ from .verify import verify
 from .types import Claim
 from .session import Session
 from . import render
+from .memory import SQLiteMemoryStore, Note
+from .guard import ManuscriptLeakError
 
 # Default style guide path (repo root / style / STYLE.md)
 _DEFAULT_STYLE = Path(__file__).resolve().parent.parent / "style" / "STYLE.md"
@@ -44,6 +46,12 @@ def main(argv=None) -> int:
     pe = sub.add_parser("editor"); pe.add_argument("--session", required=True)
     pe.add_argument("--answers", action="append", default=[])
     pe.add_argument("--style", default=None)
+    pms = sub.add_parser("mem-store")
+    for a in ("--session", "--venue", "--kind", "--text"): pms.add_argument(a, required=True)
+    pms.add_argument("--db")
+    pmr = sub.add_parser("mem-recall")
+    pmr.add_argument("--venue", required=True); pmr.add_argument("--db", required=True)
+    pmr.add_argument("--limit", type=int, default=20)
 
     args = ap.parse_args(argv)
 
@@ -101,6 +109,25 @@ def main(argv=None) -> int:
             _write_draft(s, "editor", d); return 0
         except (FileNotFoundError, ValueError, RetentionError) as e:
             print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if args.cmd == "mem-store":
+        s = Session(Path(args.session))
+        db = args.db or str(s.dir / "memory.db")
+        try:
+            doc = s.load_doc()
+            SQLiteMemoryStore(db).store(Note(args.text, args.venue, args.kind), doc)
+        except (FileNotFoundError, ValueError, sqlite3.OperationalError, ManuscriptLeakError) as e:
+            print(f"mem-store failed: {e}", file=sys.stderr); return 2
+        print(f"stored note for {args.venue}"); return 0
+
+    if args.cmd == "mem-recall":
+        try:
+            notes = SQLiteMemoryStore(args.db).recall(args.venue, args.limit)
+            for nt in notes: print(f"[{nt.venue}/{nt.kind}] {nt.text}")
+            return 0
+        except (FileNotFoundError, ValueError, sqlite3.OperationalError, ManuscriptLeakError) as e:
+            print(f"mem-recall failed: {e}", file=sys.stderr)
             return 2
 
     return 2

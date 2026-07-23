@@ -46,6 +46,36 @@ verification (not in verified pool or failed re-verification against the documen
 `zero_retention=True`. The `style/STYLE.md` voice guide is distilled and committable;
 raw manuscript text and reports are never committed.
 
+### Phase 3 (SP-C): Memory
+
+Store and recall referee-authored notes across sessions. Memory is guarded:
+manuscript-verbatim text can never be stored. All notes are explicitly written by the
+referee — no LLM auto-distillation, no automatic extraction from manuscripts.
+
+**Guarded write:**
+- `mem-store` requires a session document to validate against. The write is rejected
+  (exit 2, printed error) and nothing is stored if the input text:
+  - Contains a verbatim manuscript fragment (short <8-word exact match, or ≥8-word
+    contiguous run, or ≥8-word scattered n-gram overlap)
+- This fail-closed design ensures manuscript confidentiality: text under review cannot
+  leak into memory.
+
+**Commands:**
+    # Store a referee-authored note (requires --session to guard against manuscript text)
+    refereekit mem-store --session ./work/paperA --venue PRX --kind verdict \
+        --text "PRX: lean accept-after-major on approximate-but-validated theory" \
+        --db ./work/memory.db
+
+    # Recall notes for a venue (default: 20 most recent, deduplicated by normalized text)
+    refereekit mem-recall --venue PRX --db ./work/memory.db
+
+**Deduplication and recency:**
+- Recall returns distinct notes (exact-text dedup), newest-first, capped at 20 notes (configurable).
+- Sorted by `created_at` descending.
+
+**Note kinds:** `verdict`, `quote`, `claim`, `method`, `style` — the `kind` field is
+stored but not used for filtering in this phase.
+
 ## Extraction limits
 
 - **Figures:** Reliably extracted from caption lines (handles "FIG." and "Figure" prefixes).
