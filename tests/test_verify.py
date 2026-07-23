@@ -3,7 +3,7 @@ from refereekit.types import Claim
 
 def _first_real_eq_id(doc):
     """Select first plausible low-numbered equation label, not scan-order-dependent."""
-    cands = sorted(int(e.id) for e in doc.equations if e.id.isdigit() and int(e.id) <= 12)
+    cands = sorted(int(e.id) for e in doc.equations if e.id.isdigit() and 1 <= int(e.id) <= 12)
     return str(cands[0]) if cands else "1"
 
 def test_quote_on_correct_page_passes(sample_doc):

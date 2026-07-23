@@ -4,7 +4,7 @@ import fitz  # PyMuPDF
 from .types import Document, Page, Figure, Equation, Section
 
 _BARE_INT = re.compile(r"\d{1,3}")
-_FIG_LINE = re.compile(r"^\s*FIG\.\s*(\d+)\.\s*(.*)$")
+_FIG_LINE = re.compile(r"^\s*(?:FIG\.|Figure)\s*(\d+)\.\s*(.*)$", re.I)
 _SEC_NUM = re.compile(r"^\s*(\d+(?:\.\d+)?)\.?\s+([A-Z][A-Za-z].{2,60})$")
 _SEC_ROMAN = re.compile(r"^\s*(I{1,3}|IV|V|VI{0,3}|IX|X)\.\s+([A-Z].{2,60})$")
 

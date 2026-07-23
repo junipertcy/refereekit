@@ -10,6 +10,8 @@ def test_inline_list_markers_are_not_equations():
     page.insert_text((72, 100), "if (1) they participate and (2) they share")
     # Right-margin equation label (x = 560 > 520.2)
     page.insert_text((560, 200), "3")
+    # Bare integer at LEFT margin — ONLY geometry can reject this
+    page.insert_text((72, 300), "7")
 
     eqs = _extract_equation_numbers(page)
     ids = {e.id for e in eqs}
@@ -19,6 +21,8 @@ def test_inline_list_markers_are_not_equations():
     # Inline markers must NOT be captured (geometry excludes them)
     assert "1" not in ids, f"Inline '1' should not be in {ids}"
     assert "2" not in ids, f"Inline '2' should not be in {ids}"
+    # Bare left-margin integer must be excluded by geometry
+    assert "7" not in ids, f"bare left-margin '7' must be excluded by geometry, got {ids}"
 
     doc.close()
 
