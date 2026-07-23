@@ -24,6 +24,7 @@ def test_nonexistent_equation_fails(sample_doc):
     v = verify(Claim("nope", "equation", "9"), sample_doc)
     assert v.status == "FAIL"
 
-def test_figure_claim_flags(sample_doc):
+def test_nonexistent_figure_fails_when_no_figures(sample_doc):
+    # sample_doc has no figures, so figure claim should fail
     v = verify(Claim("Realizability regions", "figure", "1"), sample_doc)
-    assert v.status == "FLAG"
+    assert v.status == "FAIL"

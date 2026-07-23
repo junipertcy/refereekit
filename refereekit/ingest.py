@@ -19,6 +19,8 @@ def _extract_equation_numbers(page) -> list[Equation]:
             for span in line["spans"]:
                 t = span["text"].strip()
                 if _BARE_INT.fullmatch(t) and span["bbox"][0] > 0.85 * W:
+                    if t == "0":
+                        continue
                     if t not in seen:
                         seen.add(t)
                         eqs.append(Equation(id=t, page=pno, body=""))

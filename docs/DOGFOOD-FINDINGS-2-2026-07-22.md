@@ -49,3 +49,18 @@ only PASS equation ids within the detected contiguous run (e.g. 1..max-contiguou
    for equation labels; keep the documented best-effort caveat.
 3. (Still open) quote-match normalization; report/editor DRY helper; diagram
    refresh. Then SP-C (memory) on a solid, coherent verify layer.
+
+## Resolved by verify-coherence cycle (2026-07-22)
+
+- **Finding 1 (figure verify):** RESOLVED. `verify --kind figure` now checks
+  existence against `doc.figures` — PASS if the figure number exists, FAIL if not
+  (mirrors the equation branch). Verified on the real paper: fig 1 -> PASS, fig 9 ->
+  FAIL. Unknown kinds (e.g. "table") still FLAG. Figure *content* claims remain the
+  referee's judgment.
+- **Finding 2 (noise id "0"):** RESOLVED for the demonstrated case. Ingest now drops
+  equation id "0" (never a real label); `verify equation 0` -> FAIL (was PASS).
+  Conservative filter — higher noise ids (e.g. 22, 30) still possible and remain
+  documented best-effort; real labels 1..7 unaffected.
+- **Still open (deferred):** verbatim quote matching (paraphrase/nearest-line);
+  contiguous-run equation filtering (chose the conservative drop-"0" only);
+  report/editor DRY helper; diagram refresh.
