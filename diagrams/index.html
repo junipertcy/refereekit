@@ -107,18 +107,18 @@
       zero-retention LLM API — never to Exa or the memory store.</div>
     <div class="diagram"><pre class="mmd">
 flowchart LR
-    referee["👤 Referee (you)<br/><i>asks, decides verdict</i>"]:::human
-    rk(["🤖 refereekit<br/><i>ingest · verify · Q&amp;A · draft</i>"]):::core
-    paper["📄 Submitted PDF<br/><i>local — never leaves machine</i>"]:::ext
-    llm["🧠 zero-retention<br/>LLM API"]:::ext
-    lit["🔎 Exa<br/>search API"]:::ext
-    mem[("🗄️ Memory store<br/>SQLite now / mem0 later")]:::ext
-    outputs["📝 Outputs<br/>report · editor letter · live HTML"]:::core
+    referee["👤 Referee (you)&lt;br/&gt;&lt;i&gt;asks, decides verdict&lt;/i&gt;"]:::human
+    rk(["🤖 refereekit&lt;br/&gt;&lt;i&gt;ingest · verify · Q&amp;A · draft&lt;/i&gt;"]):::core
+    paper["📄 Submitted PDF&lt;br/&gt;&lt;i&gt;local — never leaves machine&lt;/i&gt;"]:::ext
+    llm["🧠 zero-retention&lt;br/&gt;LLM API"]:::ext
+    lit["🔎 Exa&lt;br/&gt;search API"]:::ext
+    mem[("🗄️ Memory store&lt;br/&gt;SQLite now / mem0 later")]:::ext
+    outputs["📝 Outputs&lt;br/&gt;report · editor letter · live HTML"]:::core
     referee <-->|"questions / choices / sign-off"| rk
     paper -->|"read locally"| rk
-    rk -->|"manuscript text OK<br/>(zero-retention only)"| llm
-    rk -->|"topics only<br/>(no manuscript)"| lit
-    rk -->|"your notes only<br/>(no manuscript)"| mem
+    rk -->|"manuscript text OK&lt;br/&gt;(zero-retention only)"| llm
+    rk -->|"topics only&lt;br/&gt;(no manuscript)"| lit
+    rk -->|"your notes only&lt;br/&gt;(no manuscript)"| mem
     rk -->|"produce"| outputs
     outputs -->|"review"| referee
     classDef core fill:#d7efe6,stroke:#0f766e,stroke-width:2px,color:#12312c;
@@ -136,16 +136,16 @@ flowchart LR
       inline in the Q&amp;A loop, not a final pass.</div>
     <div class="diagram"><pre class="mmd">
 flowchart TD
-    S0["0 · INGEST<br/>text · figures · equations<br/>→ map to pages"]:::core
-    S1["1 · SUMMARIZE<br/>+ literature context"]:::core
-    S2["2 · Q&amp;A LOOP<br/>answer → verify each anchor<br/>→ live HTML (MathJax)"]:::core
-    S3{"3 · VERDICT<br/>recommend · venue · major/minor"}:::human
-    S4["4 · DRAFT<br/>report in your voice"]:::core
-    S5{"5 · CHOOSE DETAIL<br/>per-section length"}:::human
-    S6["6 · EDITOR LETTER<br/>structured a/b/c/d"]:::core
+    S0["0 · INGEST&lt;br/&gt;text · figures · equations&lt;br/&gt;→ map to pages"]:::core
+    S1["1 · SUMMARIZE&lt;br/&gt;+ literature context"]:::core
+    S2["2 · Q&amp;A LOOP&lt;br/&gt;answer → verify each anchor&lt;br/&gt;→ live HTML (MathJax)"]:::core
+    S3{"3 · VERDICT&lt;br/&gt;recommend · venue · major/minor"}:::human
+    S4["4 · DRAFT&lt;br/&gt;report in your voice"]:::core
+    S5{"5 · CHOOSE DETAIL&lt;br/&gt;per-section length"}:::human
+    S6["6 · EDITOR LETTER&lt;br/&gt;structured a/b/c/d"]:::core
     S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
     S2 -.->|"loop until satisfied"| S2
-    V(["verify: PASS keep ·<br/>FAIL auto-fix ·<br/>FLAG → you"]):::core
+    V(["verify: PASS keep ·&lt;br/&gt;FAIL auto-fix ·&lt;br/&gt;FLAG → you"]):::core
     S2 -.-> V
     classDef core fill:#d7efe6,stroke:#0f766e,stroke-width:2px,color:#12312c;
     classDef human fill:#fbd9e0,stroke:#be123c,stroke-width:2.5px,color:#3d1620;
@@ -164,24 +164,24 @@ flowchart TD
 flowchart TB
     subgraph HG["HARNESS GLUE — thin, swappable"]
       direction LR
-      cc["Claude Code driver<br/><i>today</i>"]:::glue
-      pex["pi.dev / bare CLI<br/><i>later</i>"]:::glue
+      cc["Claude Code driver&lt;br/&gt;&lt;i&gt;today&lt;/i&gt;"]:::glue
+      pex["pi.dev / bare CLI&lt;br/&gt;&lt;i&gt;later&lt;/i&gt;"]:::glue
     end
     subgraph PC["PORTABLE CORE — refereekit/"]
       direction TB
       subgraph BUILT["Built &amp; tested — SP-A → SP-D"]
         direction LR
         b1["types"]:::core
-        b2["ingest<br/>text·fig·eq"]:::core
-        b3["verify<br/>PASS/FAIL/FLAG"]:::core
+        b2["ingest&lt;br/&gt;text·fig·eq"]:::core
+        b3["verify&lt;br/&gt;PASS/FAIL/FLAG"]:::core
         b4["guard"]:::core
         b5["render"]:::core
         b6["session"]:::core
         b7["cli"]:::core
-        b8["llm<br/>zero-retention"]:::core
-        b9["drafts<br/>report·editor"]:::core
-        b10["memory<br/>read + write (SQLite)"]:::core
-        b11["agent loop<br/>review"]:::core
+        b8["llm&lt;br/&gt;zero-retention"]:::core
+        b9["drafts&lt;br/&gt;report·editor"]:::core
+        b10["memory&lt;br/&gt;read + write (SQLite)"]:::core
+        b11["agent loop&lt;br/&gt;review"]:::core
       end
       subgraph LATER["Deferred"]
         direction LR
@@ -191,8 +191,8 @@ flowchart TB
     subgraph RES["EXTERNAL RESOURCES"]
       direction LR
       exaR["Exa API"]:::ext
-      llmR["zero-retention<br/>LLM API"]:::ext
-      memR[("SQLite now /<br/>mem0 later")]:::ext
+      llmR["zero-retention&lt;br/&gt;LLM API"]:::ext
+      memR[("SQLite now /&lt;br/&gt;mem0 later")]:::ext
     end
     HG -->|"drives (thin wiring)"| PC
     b8 -->|"manuscript OK"| llmR
@@ -213,12 +213,12 @@ flowchart TB
     <div class="sub">Two human gates plus non-optional fact-verification. The agent assists but never overreaches.</div>
     <div class="diagram"><pre class="mmd">
 flowchart LR
-    A["refereekit proposes"]:::core --> G1{"Gate 1 · Verdict<br/>recommend · venue · major/minor"}:::human
-    A --> G2{"Gate 2 · Per-section detail<br/>you choose lengths"}:::human
-    A --> G3{"Facts checked<br/>vs. the actual PDF?"}:::human
-    G1 -->|"you sign off"| OUT["Final report<br/>+ editor letter"]:::core
+    A["refereekit proposes"]:::core --> G1{"Gate 1 · Verdict&lt;br/&gt;recommend · venue · major/minor"}:::human
+    A --> G2{"Gate 2 · Per-section detail&lt;br/&gt;you choose lengths"}:::human
+    A --> G3{"Facts checked&lt;br/&gt;vs. the actual PDF?"}:::human
+    G1 -->|"you sign off"| OUT["Final report&lt;br/&gt;+ editor letter"]:::core
     G2 -->|"you choose"| OUT
-    G3 -->|"every anchor re-verified<br/>PASS / FAIL / FLAG"| OUT
+    G3 -->|"every anchor re-verified&lt;br/&gt;PASS / FAIL / FLAG"| OUT
     classDef core fill:#d7efe6,stroke:#0f766e,stroke-width:2px,color:#12312c;
     classDef human fill:#fbd9e0,stroke:#be123c,stroke-width:2.5px,color:#3d1620;
     </pre></div>
@@ -251,7 +251,7 @@ sequenceDiagram
         A-->>R: verified answer → live HTML
     end
     R->>A: form verdict
-    Note over R,A: GATE 1 — you decide<br/>recommend · venue · major/minor
+    Note over R,A: GATE 1 — you decide&lt;br/&gt;recommend · venue · major/minor
     A->>M: recall your style (notes only)
     A-->>R: draft report in your voice
     R->>A: choose per-section detail
