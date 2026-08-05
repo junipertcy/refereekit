@@ -7,9 +7,13 @@ paraphrase, so this module narrows verification to quoted spans.
 """
 import re
 
-# Straight or curly quotes around at least 12 characters. The floor keeps out
-# scare-quoted jargon ("not innocuous") that carries no page-checkable content.
-_QUOTED = re.compile(r'["“]([^"”]{12,400})["”]')
+# Quoted spans shorter than this are scare-quoting, not evidence: a short
+# phrase collides by accident and cannot carry a page claim.
+MIN_QUOTE_CHARS = 12
+
+# Straight or curly quotes around 1-400 characters. Match balanced pairs first;
+# the length floor is applied in Python to avoid parity inversion.
+_QUOTED = re.compile(r'["“]([^"”]{1,400})["”]')
 
 _PAGE_ANCHOR = re.compile(r"(?:\bp\.?\s*|\bpage\s+)(\d{1,3})\b", re.I)
 
@@ -24,7 +28,7 @@ def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
         raw = m.group(1)
         lead = len(raw) - len(raw.lstrip())
         text = raw.strip()
-        if not text:
+        if not text or len(text) < MIN_QUOTE_CHARS:
             continue
         start = m.start(1) + lead
         out.append((start, start + len(text), text))

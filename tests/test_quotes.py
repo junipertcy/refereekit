@@ -123,3 +123,29 @@ def test_bare_page_anchors_multiple_bare_only():
     """Multiple bare page references, no quotations."""
     prose = 'See p. 3 and p. 9 for details.'
     assert bare_page_anchors(prose) == ['3', '9']
+
+
+def test_short_quotes_do_not_invert_parity():
+    """Regression: short quotes (<12 chars) below the floor cannot match, so
+    the regex engine resumes inside them and pairs their close with the next
+    open, yielding the text BETWEEN quotations as a false quotation."""
+    prose = 'The bound is "tight" and the kernel "dampens all residual couplings in that regime" on p. 7.'
+    spans = quoted_spans(prose)
+    # Should return only the long genuine quotation, not the inter-quote prose
+    assert len(spans) == 1
+    assert spans[0][2] == "dampens all residual couplings in that regime"
+    # The false artifact 'and the kernel' must NOT appear
+    assert not any("and the kernel" in text for _, _, text in spans)
+
+
+def test_alternating_short_and_long_quotes():
+    """Only long quotations (≥12 chars) should be returned; short ones are
+    scare-quoting and must not break parity for subsequent quotes."""
+    prose = 'They call it "ok" but the model "shows convergence behavior" and "no" again.'
+    spans = quoted_spans(prose)
+    texts = [t for _, _, t in spans]
+    # Only the long quote survives
+    assert texts == ["shows convergence behavior"]
+    # Short quotes are not returned
+    assert "ok" not in texts
+    assert "no" not in texts
