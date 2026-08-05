@@ -1,11 +1,10 @@
 import re
-from collections import Counter
 from dataclasses import dataclass, field
 from .types import Claim
 from .verify import verify
 from .llm import complete
 from .style import load_style
-from .quotes import pair_with_pages
+from .quotes import pair_with_pages, bare_page_anchors
 
 _PAGE = re.compile(r"(?:\bp\.?\s*|\bpage\s+)(\d{1,3})\b", re.I)
 _EQ = re.compile(r"(?:\bEq\.?\s*|\bequation\s+)\((\d{1,3})\)", re.I)
@@ -18,15 +17,10 @@ def extract_anchors(text: str) -> list[Claim]:
     existence checks and carry no quotation.
     """
     found = {}
-    quoted = Counter()   # anchor -> count of quotations paired to it
     for quote, anchor in pair_with_pages(text):
-        quoted[anchor] += 1
         found[("page", anchor, quote)] = Claim(quote, "page", anchor)
-    all_pages = Counter(m.group(1) for m in _PAGE.finditer(text))
-    for anchor, total_count in all_pages.items():
-        bare_count = total_count - quoted[anchor]
-        for _ in range(bare_count):
-            found[("page", anchor, "")] = Claim("", "page", anchor)
+    for anchor in bare_page_anchors(text):
+        found[("page", anchor, "")] = Claim("", "page", anchor)
     for m in _EQ.finditer(text):
         found[("equation", m.group(1), "")] = Claim("", "equation", m.group(1))
     return list(found.values())

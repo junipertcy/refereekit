@@ -1,4 +1,4 @@
-from refereekit.quotes import quoted_spans, pair_with_pages
+from refereekit.quotes import quoted_spans, pair_with_pages, bare_page_anchors
 
 
 def test_finds_a_straight_quote():
@@ -62,3 +62,64 @@ def test_offsets_bound_the_stripped_text():
     start, end, text = spans[0]
     assert text == "dampens all residual couplings"
     assert prose[start:end] == text
+
+
+def test_bare_page_anchors_single_quoted_page():
+    """One quotation paired to the only page anchor leaves no bare claims."""
+    prose = 'The estimator "dampens all residual couplings in that regime" on p. 7.'
+    assert bare_page_anchors(prose) == []
+
+
+def test_bare_page_anchors_quoted_and_bare_same_page():
+    """A quotation claims one page mention, the second mention is bare."""
+    prose = 'The estimator "dampens all residual couplings in that regime" on p. 7. See also p. 7.'
+    assert bare_page_anchors(prose) == ['7']
+
+
+def test_bare_page_anchors_two_quotes_one_anchor():
+    """Two quotations both claim the same anchor, no bare mention."""
+    prose = 'It "dampens all residual couplings" on p. 7 and "the lower band remains order one" on p. 7.'
+    assert bare_page_anchors(prose) == []
+
+
+def test_bare_page_anchors_page_inside_quotation():
+    """A page number inside a quotation is not claimed by any quote, surfaces as bare."""
+    prose = 'They write "as shown on p. 7 the bound holds" on p. 9.'
+    assert bare_page_anchors(prose) == ['9']
+
+
+def test_bare_page_anchors_negative_count_regression():
+    """Three quotations to one anchor plus one bare mention: the old Counter
+    approach computed bare_count = 2 - 3 = -1, range(-1) yielded nothing, and
+    the bare pointer vanished."""
+    prose = 'Note "dampens all residual couplings", "the lower band remains order one", "a spectral plateau of width W" on p. 7. Also p. 7.'
+    assert bare_page_anchors(prose) == ['7']
+
+
+def test_bare_page_anchors_two_quotes_one_anchor_plus_bare():
+    """Two quotations to one anchor plus one bare mention."""
+    prose = 'They say "dampens all residual couplings" and "the lower band remains order one" on p. 7. See also p. 7.'
+    assert bare_page_anchors(prose) == ['7']
+
+
+def test_bare_page_anchors_no_quotes_only():
+    """Bare page pointer with no quotations anywhere."""
+    prose = 'The spike eigenvalue is order P, see p. 7.'
+    assert bare_page_anchors(prose) == ['7']
+
+
+def test_bare_page_anchors_no_pages():
+    """No page anchors at all."""
+    assert bare_page_anchors('As Eq. (25) shows.') == []
+
+
+def test_bare_page_anchors_quote_with_no_page():
+    """Quotation with no page anchor anywhere is not paired, so no anchors are claimed."""
+    prose = 'They call it "dampens all residual couplings" without a page.'
+    assert bare_page_anchors(prose) == []
+
+
+def test_bare_page_anchors_multiple_bare_only():
+    """Multiple bare page references, no quotations."""
+    prose = 'See p. 3 and p. 9 for details.'
+    assert bare_page_anchors(prose) == ['3', '9']

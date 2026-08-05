@@ -63,7 +63,12 @@ def test_same_page_quoted_and_bare():
 
 
 def test_page_inside_quotation_creates_bare_claim():
-    """A page number appearing inside a quotation yields a bare claim."""
+    """A page number appearing inside a quotation yields a bare claim.
+
+    This pins the behavior that p.7 inside the quote is not consumed by the
+    quote's pairing to p.9, so p.7 surfaces as a bare (unverified) claim.
+    However, this test passes even with the old broken code, so it documents
+    behavior rather than catching the fix."""
     prose = 'They write "as shown on p. 7 the bound holds" on p. 9.'
     claims = [c for c in extract_anchors(prose) if c.kind == "page"]
     assert len(claims) == 2

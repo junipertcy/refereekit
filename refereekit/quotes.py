@@ -31,6 +31,13 @@ def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
     return out
 
 
+def _nearest(anchors, start, end):
+    """Index of the anchor closest to the span; 0 distance if it sits inside."""
+    return min(range(len(anchors)),
+               key=lambda i: 0 if start <= anchors[i][0] <= end
+               else min(abs(anchors[i][0] - end), abs(start - anchors[i][0])))
+
+
 def pair_with_pages(prose: str) -> list[tuple[str, str]]:
     """Pair each quotation with the nearest page citation in `prose`.
 
@@ -43,9 +50,20 @@ def pair_with_pages(prose: str) -> list[tuple[str, str]]:
 
     out = []
     for start, end, text in quoted_spans(prose):
-        # Distance from the quotation to each anchor; 0 if the anchor sits
-        # inside the quoted span (a quote that cites itself).
-        nearest = min(anchors, key=lambda a: 0 if start <= a[0] <= end
-                      else min(abs(a[0] - end), abs(start - a[0])))
-        out.append((text, nearest[1]))
+        i = _nearest(anchors, start, end)
+        out.append((text, anchors[i][1]))
     return out
+
+
+def bare_page_anchors(prose: str) -> list[str]:
+    """Page citations that no quotation was attributed to.
+
+    These are pointers the prose gives without quoting anything, so there is
+    nothing to check them against and they must surface as unverified rather
+    than vanish.
+    """
+    anchors = [(m.start(), m.group(1)) for m in _PAGE_ANCHOR.finditer(prose)]
+    if not anchors:
+        return []
+    claimed = {_nearest(anchors, s, e) for s, e, _ in quoted_spans(prose)}
+    return [a for i, (_, a) in enumerate(anchors) if i not in claimed]
