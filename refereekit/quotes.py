@@ -9,7 +9,7 @@ import re
 
 # Straight or curly quotes around at least 12 characters. The floor keeps out
 # scare-quoted jargon ("not innocuous") that carries no page-checkable content.
-_QUOTED = re.compile(r'[""]([^""]{12,400})[""]')
+_QUOTED = re.compile(r'["“]([^"”]{12,400})["”]')
 
 _PAGE_ANCHOR = re.compile(r"(?:\bp\.?\s*|\bpage\s+)(\d{1,3})\b", re.I)
 

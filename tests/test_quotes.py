@@ -11,7 +11,7 @@ def test_finds_a_straight_quote():
 
 
 def test_finds_a_curly_quote():
-    prose = 'The estimator "dampens all residual couplings" per p. 7.'
+    prose = 'The estimator “dampens all residual couplings” per p. 7.'
     assert [t for _, _, t in quoted_spans(prose)] == ["dampens all residual couplings"]
 
 
