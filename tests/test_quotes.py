@@ -129,13 +129,13 @@ def test_short_quotes_do_not_invert_parity():
     """Regression: short quotes (<12 chars) below the floor cannot match, so
     the regex engine resumes inside them and pairs their close with the next
     open, yielding the text BETWEEN quotations as a false quotation."""
-    prose = 'The bound is "tight" and the kernel "dampens all residual couplings in that regime" on p. 7.'
+    prose = 'The bound is "tight" whereas the estimator "dampens all residual couplings in that regime" on p. 7.'
     spans = quoted_spans(prose)
     # Should return only the long genuine quotation, not the inter-quote prose
     assert len(spans) == 1
     assert spans[0][2] == "dampens all residual couplings in that regime"
-    # The false artifact 'and the kernel' must NOT appear
-    assert not any("and the kernel" in text for _, _, text in spans)
+    # The false artifact 'whereas the estimator' must NOT appear
+    assert not any("whereas the estimator" in text for _, _, text in spans)
 
 
 def test_alternating_short_and_long_quotes():
