@@ -25,3 +25,19 @@ def test_qa_sentinel_first_yields_empty_transcript(tmp_path, real_pdf_path):
     tr = _qa_loop(s, doc, backend=FakeBackend("x"),
                   input_fn=lambda _="": "", output_fn=lambda _:None)
     assert tr == []
+def test_qa_records_a_bare_page_pointer(tmp_path, real_pdf_path):
+    """A citation with no quotation still enters the pool. Its page exists, so
+    the report may cite it; only the wording is unchecked. Leaving it out is
+    what made a later draft flag correct prose as "not in verified pool"."""
+    s = Session.create(tmp_path, "p"); doc = ingest(real_pdf_path); s.save_doc(doc)
+    # p. 999 is inside the anchor pattern's 1-3 digit range but not in the PDF.
+    canned = "The construction is described on p. 3, and p. 999 is not a page."
+    out = []
+    script = iter(["where is the construction?", ""])
+    _qa_loop(s, doc, backend=FakeBackend(canned),
+             input_fn=lambda _="": next(script), output_fn=out.append)
+    anchors = {(c.kind, c.anchor) for c in Session(s.dir).verified_claims()}
+    assert ("page", "3") in anchors        # page exists, wording unchecked
+    assert ("page", "999") not in anchors  # page absent: a FAIL, never pooled
+    assert any("unquoted, not verified" in o for o in out)
+    assert any("CITATION FAILED" in o for o in out)

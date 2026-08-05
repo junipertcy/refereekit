@@ -42,10 +42,23 @@ def test_nonexistent_page_still_fails_even_with_a_real_quote():
     assert "does not exist" in v.evidence
 
 
-def test_short_text_is_flagged_before_the_page_is_checked():
-    """Ordering matters: 'no quotation' is the more useful diagnosis."""
+def test_a_bare_pointer_to_a_nonexistent_page_fails():
+    """Ordering matters, and the page comes first. A pointer to a page that is
+    not in the document is a genuine FAIL, however little it quotes. Gating on
+    the quotation first would report it FLAG, and FLAG means the citation is
+    safe to keep, which would let a pointer to a nonexistent page into the
+    claim pool."""
     v = verify(Claim("", "page", "9999"), _doc())
+    assert v.status == "FAIL"
+    assert "does not exist" in v.evidence
+
+
+def test_flag_guarantees_the_page_exists():
+    """FLAG is what licenses recording a bare pointer, so it has to promise
+    more than 'unchecked': the page is confirmed present."""
+    v = verify(Claim("", "page", "5"), _doc())
     assert v.status == "FLAG"
+    assert "page 5 exists" in v.evidence
 
 
 def test_verify_exit_codes_via_cli():

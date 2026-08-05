@@ -139,6 +139,12 @@ exists, the wording was never checked. This is the common case: referee prose
 paraphrases the manuscript, and a paraphrase cannot be substring-matched. It
 is reported as unverified rather than treated as a failed citation.
 
+`FLAG` is checked in that order deliberately, so it carries a guarantee: the
+page is confirmed to be in the document. A citation to a page that is not
+there is a `FAIL`, however little it quotes. That is what makes a `FLAG`
+citation safe to keep in the claim pool and safe to cite in a draft, with only
+its wording unverified.
+
 A `PASS` on an `equation` or `figure` claim is weaker and structural: that ID
 exists in the document. It says nothing about content.
 

@@ -108,6 +108,11 @@ def _qa_loop(session, doc, *, backend, input_fn, output_fn, sentinel="") -> list
             if v.status == "PASS":
                 session.record_claim(a)
             elif v.status == "FLAG":
+                # A bare pointer belongs in the pool. Its page exists, so the
+                # report may cite it; only the wording is unchecked. Recording
+                # jointly with quotations is what keeps a later draft from
+                # being flagged "not in verified pool" for correct prose.
+                session.record_claim(a)
                 unverified.append(f"{a.kind} ({a.anchor})")
             else:
                 flags.append(f"{a.kind} ({a.anchor})")

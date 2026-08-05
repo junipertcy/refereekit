@@ -6,10 +6,10 @@ def _norm(s: str) -> str:
 
 def verify(claim: Claim, doc: Document) -> Verdict:
     if claim.kind in ("quote", "page"):
-        words = _norm(claim.text).split()
-        if len(words) < MIN_EVIDENCE_WORDS:
-            return Verdict("FLAG", f"no quotation to verify: {len(words)} words, "
-                                   f"need {MIN_EVIDENCE_WORDS}")
+        # The page is checked first so that FLAG can carry a guarantee: the
+        # page exists, only the wording is unchecked. Gating on the quotation
+        # first would FLAG a citation to a page that is not in the document,
+        # which is a genuine FAIL and must not be reported as unverifiable.
         try:
             page_no = int(claim.anchor)
         except ValueError:
@@ -18,6 +18,11 @@ def verify(claim: Claim, doc: Document) -> Verdict:
             text = doc.page_text(page_no)
         except KeyError:
             return Verdict("FAIL", f"page {page_no} does not exist")
+        words = _norm(claim.text).split()
+        if len(words) < MIN_EVIDENCE_WORDS:
+            return Verdict("FLAG", f"page {page_no} exists; no quotation to "
+                                   f"verify: {len(words)} words, need "
+                                   f"{MIN_EVIDENCE_WORDS}")
         if _norm(claim.text) in _norm(text):
             return Verdict("PASS", f"found on page {page_no}")
         return Verdict("FAIL", f"not found on page {page_no}")
