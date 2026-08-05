@@ -189,3 +189,42 @@ def test_nearest_two_quotes_same_page():
         ("shows convergence to equilibrium quickly", "7"),
         ("demonstrates stability properties", "7"),
     ]
+
+
+def test_attribution_keeps_the_page_the_prose_named():
+    """Pins that a misattributed quotation stays attributed to the page the
+    prose named, so the verifier can report the mismatch instead of hiding it."""
+    prose = ('The authors assert on p. 15 that the model '
+             '"dampens all residual couplings" (cf. p. 7).')
+    assert pair_with_pages(prose) == [("dampens all residual couplings", "15")]
+    assert bare_page_anchors(prose) == ["7"]
+
+
+def test_attribution_not_stolen_by_a_following_citation():
+    """Pins that a following page citation does not steal a quotation from the
+    citation that introduced it."""
+    prose = 'Page 7 says "dampens all residual couplings"; page 15 shows the panels.'
+    assert pair_with_pages(prose) == [("dampens all residual couplings", "7")]
+    assert bare_page_anchors(prose) == ["15"]
+
+
+def test_attribution_falls_back_to_the_following_citation():
+    prose = 'The estimator "dampens all residual couplings" on p. 7.'
+    assert pair_with_pages(prose) == [("dampens all residual couplings", "7")]
+    assert bare_page_anchors(prose) == []
+
+
+def test_attribution_prefers_a_citation_inside_the_quotation():
+    prose = 'They write "as shown on p. 7 the bound holds" on p. 9.'
+    assert pair_with_pages(prose) == [("as shown on p. 7 the bound holds", "7")]
+    assert bare_page_anchors(prose) == ["9"]
+
+
+def test_attribution_two_quotes_two_mentions_of_one_page():
+    prose = ('It "dampens all residual couplings" on p. 7 '
+             'and "the lower band remains order one" on p. 7.')
+    assert pair_with_pages(prose) == [
+        ("dampens all residual couplings", "7"),
+        ("the lower band remains order one", "7"),
+    ]
+    assert bare_page_anchors(prose) == []

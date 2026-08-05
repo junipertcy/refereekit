@@ -17,6 +17,19 @@ _QUOTED = re.compile(r'["“]([^"”]{1,400})["”]')
 
 _PAGE_ANCHOR = re.compile(r"(?:\bp\.?\s*|\bpage\s+)(\d{1,3})\b", re.I)
 
+# Sentence scope decides attribution, so we need sentence ends. A semicolon
+# counts: `Page 7 says "..."; page 15 shows the panels.` cites two pages about
+# two different things.
+_TERMINATOR = re.compile(r"[.!?;](?=\s|$)")
+
+# A period after one of these is an abbreviation, not a sentence end. Without
+# this, "on p. 7" would split mid-sentence and the citation would fall outside
+# the sentence it belongs to.
+_ABBREVIATIONS = {"p", "pp", "eq", "eqs", "fig", "figs", "cf", "sec", "secs",
+                  "ref", "refs", "no", "vs", "al", "e.g", "i.e", "resp"}
+
+_WORD_BEFORE = re.compile(r"([A-Za-z.]+)$")
+
 
 def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
     """Return (start, end, text) for each quotation in `prose`.
@@ -35,52 +48,94 @@ def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
     return out
 
 
-def _nearest(anchors, start, end):
-    """Index of the anchor closest to the span; prefers anchors that precede it.
+def _sentence_breaks(prose: str) -> list[int]:
+    """Offsets of sentence terminators, skipping known abbreviations."""
+    out = []
+    for m in _TERMINATOR.finditer(prose):
+        w = _WORD_BEFORE.search(prose[:m.start()])
+        if w and w.group(1).lower().rstrip(".") in _ABBREVIATIONS:
+            continue
+        out.append(m.start())
+    return out
 
-    An anchor inside the span has distance 0 and wins. Among anchors outside,
-    prefer one at or before the span's start if it is within 22 characters
-    (same-sentence attribution); otherwise take the absolute closest anchor.
+
+def _sentence_of(breaks: list[int], pos: int) -> int:
+    """Index of the sentence containing `pos`."""
+    return sum(1 for b in breaks if b < pos)
+
+
+def _pick(anchors, breaks, claimed, start, end) -> int:
+    """Index of the page citation this quotation is attributed to.
+
+    A citation inside the quotation is part of the quoted words and wins
+    outright. Otherwise the prose's own attribution decides: prefer a citation
+    in the same sentence, prefer one not already taken by an earlier quotation,
+    and within a pool prefer the nearest one before the quotation, falling back
+    to the nearest one after it.
+
+    Sentence scope, not character distance, is the discriminator. A citation in
+    a previous sentence attributes nothing to a quotation in this one, however
+    few characters separate them. The pools degrade in that order because
+    exclusivity is a preference, not a law: three quotations can legitimately
+    share one citation.
+
+    This answers only what the prose claims, never which page the words are
+    actually on. Re-attributing a quotation to the page where it happens to be
+    found would make every citation verify and silently erase the
+    misattributions this tool exists to catch.
     """
-    # Check for anchors inside the span (distance 0)
     for i, (pos, _) in enumerate(anchors):
         if start <= pos <= end:
             return i
-
-    # Partition: anchors before start, vs after end
-    before = [(i, start - anchors[i][0]) for i, (pos, _) in enumerate(anchors) if pos < start]
-    after = [(i, anchors[i][0] - end) for i, (pos, _) in enumerate(anchors) if pos > end]
-
-    # If we have a BEFORE within 22 chars (likely same-sentence), prefer it
-    if before:
-        closest_before = min(before, key=lambda x: x[1])
-        if closest_before[1] <= 22:
-            return closest_before[0]
-
-    # Otherwise, take the absolute closest
-    all_candidates = before + after
-    if all_candidates:
-        return min(all_candidates, key=lambda x: x[1])[0]
-
-    # Degenerate case: no anchors (caller should have checked)
+    sent = _sentence_of(breaks, start)
+    same = [i for i, (pos, _) in enumerate(anchors)
+            if _sentence_of(breaks, pos) == sent]
+    for pool in ([i for i in same if i not in claimed],
+                 same,
+                 [i for i in range(len(anchors)) if i not in claimed],
+                 list(range(len(anchors)))):
+        if not pool:
+            continue
+        before = [i for i in pool if anchors[i][0] < start]
+        if before:
+            return max(before, key=lambda i: anchors[i][0])
+        after = [i for i in pool if anchors[i][0] > end]
+        if after:
+            return min(after, key=lambda i: anchors[i][0])
     return 0
 
 
+def _attribute(prose: str) -> tuple[list[tuple[str, str]], set[int], list[tuple[int, str]]]:
+    """Attribute each quotation in `prose` to a page citation.
+
+    Returns (pairs, claimed_indices, anchors). `pair_with_pages` and
+    `bare_page_anchors` are two views of this one result, so they cannot
+    disagree about which citation a quotation took.
+
+    Quotations are walked in document order because attribution is stateful:
+    `claimed` grows as each quotation takes a citation, and an earlier
+    quotation's choice constrains a later one's. `quoted_spans` already yields
+    document order.
+    """
+    anchors = [(m.start(), m.group(1)) for m in _PAGE_ANCHOR.finditer(prose)]
+    if not anchors:
+        return [], set(), anchors
+    breaks = _sentence_breaks(prose)
+    pairs, claimed = [], set()
+    for start, end, text in quoted_spans(prose):
+        i = _pick(anchors, breaks, claimed, start, end)
+        claimed.add(i)
+        pairs.append((text, anchors[i][1]))
+    return pairs, claimed, anchors
+
+
 def pair_with_pages(prose: str) -> list[tuple[str, str]]:
-    """Pair each quotation with the nearest page citation in `prose`.
+    """Pair each quotation with the page citation the prose attributes it to.
 
     A quotation with no page citation anywhere in the prose is dropped: there
     is no anchor to check it against, so it cannot become a claim.
     """
-    anchors = [(m.start(), m.group(1)) for m in _PAGE_ANCHOR.finditer(prose)]
-    if not anchors:
-        return []
-
-    out = []
-    for start, end, text in quoted_spans(prose):
-        i = _nearest(anchors, start, end)
-        out.append((text, anchors[i][1]))
-    return out
+    return _attribute(prose)[0]
 
 
 def bare_page_anchors(prose: str) -> list[str]:
@@ -90,8 +145,5 @@ def bare_page_anchors(prose: str) -> list[str]:
     nothing to check them against and they must surface as unverified rather
     than vanish.
     """
-    anchors = [(m.start(), m.group(1)) for m in _PAGE_ANCHOR.finditer(prose)]
-    if not anchors:
-        return []
-    claimed = {_nearest(anchors, s, e) for s, e, _ in quoted_spans(prose)}
+    _, claimed, anchors = _attribute(prose)
     return [a for i, (_, a) in enumerate(anchors) if i not in claimed]
