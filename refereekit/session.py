@@ -3,6 +3,11 @@ from pathlib import Path
 from .types import Document, Claim
 from .ingest import to_json, from_json
 
+
+class ProvenanceError(RuntimeError):
+    """Raised on an attempt to overwrite a received document."""
+
+
 class Session:
     def __init__(self, dir: Path):
         self.dir = Path(dir)
@@ -41,3 +46,32 @@ class Session:
 
     def verified_claims(self) -> list[Claim]:
         return [Claim(**c) for c in self.get_state("claims", [])]
+
+    @property
+    def ours_dir(self) -> Path:
+        """Documents this referee wrote. Drafts, safe to regenerate."""
+        d = self.dir / "ours"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    @property
+    def theirs_dir(self) -> Path:
+        """Documents received from others: co-referee reports, editor letters.
+        Authoritative, never generated here."""
+        d = self.dir / "theirs"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def our_draft(self, name: str) -> Path:
+        """Path for one of our own drafts."""
+        return self.ours_dir / name
+
+    def put_theirs(self, name: str, content: str) -> Path:
+        """Store a received document. Write-once: a received artifact that can
+        be silently replaced is indistinguishable from one we generated."""
+        p = self.theirs_dir / name
+        if p.exists():
+            raise ProvenanceError(
+                f"{p} already exists; received documents are write-once")
+        p.write_text(content)
+        return p

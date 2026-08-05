@@ -25,7 +25,7 @@ def _backend():
     )
 
 def _write_draft(session, name, draft):
-    d = session.dir / "drafts"; d.mkdir(parents=True, exist_ok=True)
+    d = session.ours_dir
     (d / f"{name}.txt").write_text(draft.text)
     print(f"{name}: wrote {len(draft.text)} chars, {len(draft.flags)} flag(s)")
     for f in draft.flags:

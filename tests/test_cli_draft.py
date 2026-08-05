@@ -13,5 +13,5 @@ def test_cli_draft_writes_report_offline(tmp_path, sample_pdf_path, capsys, monk
     monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Eq. (3) is fine.")
     rc = main(["draft", "--session", str(s.dir)])
     assert rc == 0
-    assert (s.dir / "drafts" / "report.txt").read_text() == "Eq. (3) is fine."
+    assert (s.dir / "ours" / "report.txt").read_text() == "Eq. (3) is fine."
     assert "flag" in capsys.readouterr().out.lower()

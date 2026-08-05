@@ -35,13 +35,13 @@ def run_review(pdf_path, *, backend, session_dir, input_fn=input, output_fn=prin
     lengths = _detail_gate(input_fn=input_fn)
     rep = drafts.report(session, verdict, lengths, backend=backend,
                         style_path=style_path, memory=memory, venue=venue)
-    report_path = session_dir / "report.txt"
+    report_path = session.our_draft("report.txt")
     report_path.write_text(rep.text)
     # 5-6. editor
     answers = _editor_answers(input_fn=input_fn)
     ed = drafts.editor_letter(session, answers, backend=backend,
                               style_path=style_path, memory=memory, venue=venue)
-    editor_path = session_dir / "editor.txt"
+    editor_path = session.our_draft("editor.txt")
     editor_path.write_text(ed.text)
     return ReviewResult(report_path=report_path, editor_path=editor_path,
                         flags=rep.flags + ed.flags, verdict=verdict)

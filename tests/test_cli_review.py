@@ -10,8 +10,8 @@ def test_cli_review_end_to_end_offline(tmp_path, real_pdf_path, monkeypatch):
     monkeypatch.setitem(run_review.__kwdefaults__, "input_fn", new_input)
     rc = main(["review", str(real_pdf_path), "--session", str(tmp_path / "s")])
     assert rc == 0
-    assert (tmp_path / "s" / "report.txt").exists()
-    assert (tmp_path / "s" / "editor.txt").exists()
+    assert (tmp_path / "s" / "ours" / "report.txt").exists()
+    assert (tmp_path / "s" / "ours" / "editor.txt").exists()
 
 def test_cli_review_missing_pdf_exit2(tmp_path, monkeypatch):
     monkeypatch.setenv("REFEREEKIT_FAKE", "1")
@@ -40,5 +40,5 @@ def test_cli_review_with_venue_fresh_session(tmp_path, real_pdf_path, monkeypatc
     sess = tmp_path / "fresh"   # does NOT exist yet
     rc = main(["review", str(real_pdf_path), "--session", str(sess), "--venue", "PRX"])
     assert rc == 0
-    assert (sess / "report.txt").exists() and (sess / "editor.txt").exists()
+    assert (sess / "ours" / "report.txt").exists() and (sess / "ours" / "editor.txt").exists()
     assert (sess / "memory.db").exists()   # --venue created the store in the fresh dir
