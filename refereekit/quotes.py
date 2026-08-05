@@ -36,10 +36,34 @@ def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
 
 
 def _nearest(anchors, start, end):
-    """Index of the anchor closest to the span; 0 distance if it sits inside."""
-    return min(range(len(anchors)),
-               key=lambda i: 0 if start <= anchors[i][0] <= end
-               else min(abs(anchors[i][0] - end), abs(start - anchors[i][0])))
+    """Index of the anchor closest to the span; prefers anchors that precede it.
+
+    An anchor inside the span has distance 0 and wins. Among anchors outside,
+    prefer one at or before the span's start if it is within 22 characters
+    (same-sentence attribution); otherwise take the absolute closest anchor.
+    """
+    # Check for anchors inside the span (distance 0)
+    for i, (pos, _) in enumerate(anchors):
+        if start <= pos <= end:
+            return i
+
+    # Partition: anchors before start, vs after end
+    before = [(i, start - anchors[i][0]) for i, (pos, _) in enumerate(anchors) if pos < start]
+    after = [(i, anchors[i][0] - end) for i, (pos, _) in enumerate(anchors) if pos > end]
+
+    # If we have a BEFORE within 22 chars (likely same-sentence), prefer it
+    if before:
+        closest_before = min(before, key=lambda x: x[1])
+        if closest_before[1] <= 22:
+            return closest_before[0]
+
+    # Otherwise, take the absolute closest
+    all_candidates = before + after
+    if all_candidates:
+        return min(all_candidates, key=lambda x: x[1])[0]
+
+    # Degenerate case: no anchors (caller should have checked)
+    return 0
 
 
 def pair_with_pages(prose: str) -> list[tuple[str, str]]:

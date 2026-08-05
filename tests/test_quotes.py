@@ -149,3 +149,43 @@ def test_alternating_short_and_long_quotes():
     # Short quotes are not returned
     assert "ok" not in texts
     assert "no" not in texts
+
+
+def test_nearest_prefers_preceding_anchor_misattribution_case():
+    """Regression: _nearest chose the nearest anchor in either direction,
+    canceling detection of misattributions. When prose cites p. 15 but the
+    quotation is from p. 7, and both anchors exist, the tool must attribute
+    to the anchor the prose actually wrote (p. 15), not re-attribute to p. 7."""
+    # Genuine p.7 quote but prose claims p. 15, with cf. p. 7 afterward
+    prose = 'The authors assert on p. 15 that the model "shows convergence to equilibrium quickly" (cf. p. 7).'
+    assert pair_with_pages(prose) == [("shows convergence to equilibrium quickly", "15")]
+
+
+def test_nearest_prefers_preceding_anchor_correct_order_case():
+    """When the quotation IS correctly attributed to an earlier page, that
+    attribution must be preserved even if a later page anchor is closer."""
+    prose = 'Page 7 says "shows convergence to equilibrium quickly"; page 15 shows the panels.'
+    assert pair_with_pages(prose) == [("shows convergence to equilibrium quickly", "7")]
+
+
+def test_nearest_fallback_to_following_anchor():
+    """When NO anchor precedes the quotation, fall back to the closest
+    following anchor. This is the common form: quote comes before its citation."""
+    prose = 'The estimator "shows convergence to equilibrium quickly" on p. 7.'
+    assert pair_with_pages(prose) == [("shows convergence to equilibrium quickly", "7")]
+
+
+def test_nearest_inside_span_wins():
+    """An anchor inside the quoted span has distance 0 and wins."""
+    prose = 'They write "as shown on p. 7 the bound holds" on p. 9.'
+    # p. 7 is inside the span, p. 9 follows it: p. 7 wins (distance 0)
+    assert pair_with_pages(prose) == [("as shown on p. 7 the bound holds", "7")]
+
+
+def test_nearest_two_quotes_same_page():
+    """Two quotations both attributed to p. 7 stay attributed to p. 7."""
+    prose = 'It "shows convergence to equilibrium quickly" on p. 7 and "demonstrates stability properties" on p. 7.'
+    assert pair_with_pages(prose) == [
+        ("shows convergence to equilibrium quickly", "7"),
+        ("demonstrates stability properties", "7"),
+    ]
