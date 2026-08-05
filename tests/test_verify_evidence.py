@@ -23,7 +23,7 @@ def test_whitespace_only_text_is_flagged():
 
 def test_too_short_text_is_flagged():
     """Three words can collide by accident; four is the floor."""
-    assert verify(Claim("the kernel has", "page", "5"), _doc()).status == "FLAG"
+    assert verify(Claim("apple banana cherry", "page", "5"), _doc()).status == "FLAG"
 
 
 def test_real_quote_passes():
