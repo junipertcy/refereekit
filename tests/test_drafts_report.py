@@ -128,3 +128,81 @@ def test_editor_prompt_shows_the_quotation_too():
             "verdict": {}}
     out = build_editor_prompt(pool, "voice", {"a": "yes"})
     assert "a spectral plateau of width W" in out
+
+
+def test_verify_prose_valid_quotation_in_pool():
+    """Prose quoting text that IS on the page AND whose (kind, anchor) is in pool."""
+    from refereekit.drafts import _verify_prose
+    from refereekit.types import Document, Page, Claim
+
+    page_text = "The numerical algorithm converges uniformly on compact domains."
+    doc = Document(pages=[Page(n=3, text=page_text)])
+    pool = {
+        "claims": [Claim("converges uniformly on compact domains", "page", "3")],
+        "verdict": {}
+    }
+    prose = 'The method "converges uniformly on compact domains" according to p. 3.'
+    draft = _verify_prose(prose, pool, doc)
+    assert draft.flags == []
+
+
+def test_verify_prose_fabricated_quotation_caught():
+    """Prose quoting a 4+ word phrase NOT on the cited page is caught by re-verification.
+
+    This is the load-bearing test: fabricated quotations must produce a flag.
+    """
+    from refereekit.drafts import _verify_prose
+    from refereekit.types import Document, Page, Claim
+
+    page_text = "The numerical algorithm converges uniformly on compact domains."
+    doc = Document(pages=[Page(n=3, text=page_text)])
+    pool = {
+        "claims": [Claim("diverges chaotically across all parameter spaces", "page", "3")],
+        "verdict": {}
+    }
+    prose = 'The method "diverges chaotically across all parameter spaces" per p. 3.'
+    draft = _verify_prose(prose, pool, doc)
+    assert len(draft.flags) == 1
+    assert draft.flags[0].kind == "page"
+    assert draft.flags[0].anchor == "3"
+    assert "failed re-verification" in draft.flags[0].reason
+
+
+def test_verify_prose_anchor_not_in_pool():
+    """Prose citing a page that is NOT in the verified pool."""
+    from refereekit.drafts import _verify_prose
+    from refereekit.types import Document, Page, Claim
+
+    page_text = "The numerical algorithm converges uniformly on compact domains."
+    doc = Document(pages=[Page(n=3, text=page_text), Page(n=5, text="Different content.")])
+    pool = {
+        "claims": [Claim("some verified content", "page", "5")],
+        "verdict": {}
+    }
+    prose = 'The method "converges uniformly on compact domains" per p. 3.'
+    draft = _verify_prose(prose, pool, doc)
+    assert len(draft.flags) == 1
+    assert draft.flags[0].kind == "page"
+    assert draft.flags[0].anchor == "3"
+    assert "not in verified pool" in draft.flags[0].reason
+
+
+def test_verify_prose_bare_page_pointer_not_flagged():
+    """Prose citing a page bare, with no quotation, where (kind, anchor) IS in pool.
+
+    Bare pointers verify as FLAG (unverifiable), not FAIL, so they are never flagged.
+    A page number without quotation is legitimate: it points to reference material
+    but makes no factual claim, so there is nothing to verify as false.
+    """
+    from refereekit.drafts import _verify_prose
+    from refereekit.types import Document, Page, Claim
+
+    page_text = "The numerical algorithm converges uniformly on compact domains."
+    doc = Document(pages=[Page(n=3, text=page_text)])
+    pool = {
+        "claims": [Claim("", "page", "3")],
+        "verdict": {}
+    }
+    prose = 'See p. 3 for additional discussion.'
+    draft = _verify_prose(prose, pool, doc)
+    assert draft.flags == []
