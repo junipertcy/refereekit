@@ -228,3 +228,26 @@ def test_attribution_two_quotes_two_mentions_of_one_page():
         ("the lower band remains order one", "7"),
     ]
     assert bare_page_anchors(prose) == []
+
+
+def test_a_sentence_final_ordinary_word_is_not_an_abbreviation():
+    """Regression: "no" and "refs" were listed as abbreviations, so a sentence
+    ending in one was not split and the previous sentence's citation stayed in
+    scope. Neither word can precede a page anchor, so they protected nothing."""
+    prose = ('On p. 15 the answer is no. The text '
+             '"dampens all residual couplings" appears on p. 7 instead.')
+    assert pair_with_pages(prose) == [("dampens all residual couplings", "7")]
+    assert bare_page_anchors(prose) == ["15"]
+
+
+def test_a_contrast_citation_does_not_steal_a_shared_quotation():
+    """Regression: exclusivity was applied to following citations too, so the
+    second quotation was pushed onto a page it quotes nothing from. Both
+    quotations belong to p. 7; p. 15 is a contrast and stays bare."""
+    prose = ('Both "dampens all residual couplings" and '
+             '"the lower band remains order one" appear on p. 7, unlike p. 15.')
+    assert pair_with_pages(prose) == [
+        ("dampens all residual couplings", "7"),
+        ("the lower band remains order one", "7"),
+    ]
+    assert bare_page_anchors(prose) == ["15"]

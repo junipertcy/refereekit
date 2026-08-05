@@ -25,8 +25,13 @@ _TERMINATOR = re.compile(r"[.!?;](?=\s|$)")
 # A period after one of these is an abbreviation, not a sentence end. Without
 # this, "on p. 7" would split mid-sentence and the citation would fall outside
 # the sentence it belongs to.
+#
+# Only words that can plausibly precede a citation belong here. "no" and "refs"
+# were listed and are ordinary sentence-final words: they never precede a page
+# anchor, so they protected nothing while merging two sentences into one and
+# putting a previous sentence's citation in scope.
 _ABBREVIATIONS = {"p", "pp", "eq", "eqs", "fig", "figs", "cf", "sec", "secs",
-                  "ref", "refs", "no", "vs", "al", "e.g", "i.e", "resp"}
+                  "ref", "vs", "al", "e.g", "i.e", "resp"}
 
 _WORD_BEFORE = re.compile(r"([A-Za-z.]+)$")
 
@@ -69,15 +74,20 @@ def _pick(anchors, breaks, claimed, start, end) -> int:
 
     A citation inside the quotation is part of the quoted words and wins
     outright. Otherwise the prose's own attribution decides: prefer a citation
-    in the same sentence, prefer one not already taken by an earlier quotation,
-    and within a pool prefer the nearest one before the quotation, falling back
-    to the nearest one after it.
+    in the same sentence, and within that sentence prefer the nearest citation
+    before the quotation, falling back to the nearest one after it.
 
     Sentence scope, not character distance, is the discriminator. A citation in
     a previous sentence attributes nothing to a quotation in this one, however
-    few characters separate them. The pools degrade in that order because
-    exclusivity is a preference, not a law: three quotations can legitimately
-    share one citation.
+    few characters separate them.
+
+    Exclusivity applies only to preceding citations, and only as a preference.
+    `It "A" on p. 7 and "B" on p. 7.` gives each quotation its own mention, but
+    three quotations can legitimately share one, so a taken citation is reused
+    rather than skipped when nothing else precedes. A following citation is
+    never claimed exclusively: in `Both "A" and "B" appear on p. 7, unlike
+    p. 15.` the second quotation belongs to p. 7 as well, and p. 15 is a
+    contrast the prose quotes nothing from.
 
     This answers only what the prose claims, never which page the words are
     actually on. Re-attributing a quotation to the page where it happens to be
@@ -90,18 +100,18 @@ def _pick(anchors, breaks, claimed, start, end) -> int:
     sent = _sentence_of(breaks, start)
     same = [i for i, (pos, _) in enumerate(anchors)
             if _sentence_of(breaks, pos) == sent]
-    for pool in ([i for i in same if i not in claimed],
-                 same,
-                 [i for i in range(len(anchors)) if i not in claimed],
-                 list(range(len(anchors)))):
+    for pool in (same, list(range(len(anchors)))):
         if not pool:
             continue
         before = [i for i in pool if anchors[i][0] < start]
-        if before:
-            return max(before, key=lambda i: anchors[i][0])
+        free = [i for i in before if i not in claimed]
+        if free:
+            return max(free, key=lambda i: anchors[i][0])
         after = [i for i in pool if anchors[i][0] > end]
         if after:
             return min(after, key=lambda i: anchors[i][0])
+        if before:
+            return max(before, key=lambda i: anchors[i][0])
     return 0
 
 
