@@ -134,7 +134,7 @@ Verification is **quotation-scoped**. A `PASS` on a `page` or `quote` claim
 means: *these exact words, normalized for whitespace and case, are on that
 page.* Only text presented as a quotation is checked.
 
-A citation carrying no quotation verifies as `FLAG`, not `PASS` — the page
+A citation carrying no quotation verifies as `FLAG`, not `PASS`. The page
 exists, the wording was never checked. This is the common case: referee prose
 paraphrases the manuscript, and a paraphrase cannot be substring-matched. It
 is reported as unverified rather than treated as a failed citation.
@@ -144,7 +144,7 @@ exists in the document. It says nothing about content.
 
 **What verification cannot do:** it cannot tell you whether a mathematical
 claim is true. "Is Eq. (25) an identity?" is not a substring question. That
-stays human work — write a script and check it.
+stays human work: write a script and check it.
 
 One more limit: a quotation shorter than four words is not verified. Quoted
 spans under 12 characters are skipped as scare-quoting, and a span that
