@@ -46,3 +46,36 @@ def test_short_text_is_flagged_before_the_page_is_checked():
     """Ordering matters: 'no quotation' is the more useful diagnosis."""
     v = verify(Claim("", "page", "9999"), _doc())
     assert v.status == "FLAG"
+
+
+def test_verify_exit_codes_via_cli():
+    """PASS=0, FAIL=1, FLAG=3 so calling scripts can distinguish outcomes."""
+    from refereekit.cli import main
+    import tempfile, json
+    from pathlib import Path
+
+    doc = _doc()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        session = Path(tmpdir) / "session"
+        session.mkdir()
+        (session / "doc.json").write_text(json.dumps({
+            "pages": [{"n": p.n, "text": p.text, "blocks": []} for p in doc.pages],
+            "figures": [],
+            "equations": [],
+            "sections": []
+        }))
+
+        # PASS: verified text
+        exit_code = main(["verify", "--session", str(session), "--kind", "page",
+                         "--anchor", "5", "--text", "retains a spectral plateau"])
+        assert exit_code == 0, "PASS should exit 0"
+
+        # FAIL: contradicted
+        exit_code = main(["verify", "--session", str(session), "--kind", "page",
+                         "--anchor", "5", "--text", "no such phrase here at all"])
+        assert exit_code == 1, "FAIL should exit 1"
+
+        # FLAG: no quotation
+        exit_code = main(["verify", "--session", str(session), "--kind", "page",
+                         "--anchor", "5", "--text", "too short"])
+        assert exit_code == 3, "FLAG should exit 3"

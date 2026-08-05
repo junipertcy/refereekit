@@ -142,6 +142,8 @@ is reported as unverified rather than treated as a failed citation.
 A `PASS` on an `equation` or `figure` claim is weaker and structural: that ID
 exists in the document. It says nothing about content.
 
+Exit codes: `refereekit verify` returns 0 for PASS (verified), 1 for FAIL (contradicted), and 3 for FLAG (unverified). Calling scripts can distinguish confirmed claims from unverifiable ones.
+
 **What verification cannot do:** it cannot tell you whether a mathematical
 claim is true. "Is Eq. (25) an identity?" is not a substring question. That
 stays human work: write a script and check it.

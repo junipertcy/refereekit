@@ -77,7 +77,12 @@ def main(argv=None) -> int:
             s = Session(Path(args.session))
             v = verify(Claim(args.text, args.kind, args.anchor), s.load_doc())
             print(f"{v.status}: {v.evidence}")
-            return 1 if v.status == "FAIL" else 0
+            if v.status == "FAIL":
+                return 1
+            elif v.status == "FLAG":
+                return 3
+            else:  # PASS
+                return 0
         except (FileNotFoundError, ValueError, pymupdf.FileNotFoundError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
