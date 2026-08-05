@@ -4,16 +4,31 @@ from .types import Claim
 from .verify import verify
 from .llm import complete
 from .style import load_style
+from .quotes import pair_with_pages
 
 _PAGE = re.compile(r"(?:\bp\.?\s*|\bpage\s+)(\d{1,3})\b", re.I)
 _EQ = re.compile(r"(?:\bEq\.?\s*|\bequation\s+)\((\d{1,3})\)", re.I)
 
 def extract_anchors(text: str) -> list[Claim]:
+    """Find page and equation citations in prose.
+
+    A page citation that comes with a quotation carries that quotation, so it
+    can be checked against the manuscript. A bare page citation carries no
+    text and so verifies as FLAG (unverifiable), never PASS. Equation claims
+    are existence checks and carry no quotation.
+    """
     found = {}
+    quoted = {}          # anchor -> quotation, for pages cited with a quote
+    for quote, anchor in pair_with_pages(text):
+        quoted[anchor] = quote
+        found[("page", anchor, quote)] = Claim(quote, "page", anchor)
     for m in _PAGE.finditer(text):
-        found[("page", m.group(1))] = Claim("", "page", m.group(1))
+        anchor = m.group(1)
+        if anchor in quoted:
+            continue     # already recorded, with its quotation
+        found[("page", anchor, "")] = Claim("", "page", anchor)
     for m in _EQ.finditer(text):
-        found[("equation", m.group(1))] = Claim("", "equation", m.group(1))
+        found[("equation", m.group(1), "")] = Claim("", "equation", m.group(1))
     return list(found.values())
 
 def build_pool(session) -> dict:

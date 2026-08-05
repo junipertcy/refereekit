@@ -102,13 +102,22 @@ def _qa_loop(session, doc, *, backend, input_fn, output_fn, sentinel="") -> list
         prompt = _doc_context(doc, transcript, q)
         ans = complete(prompt, backend=backend, manuscript_ok=True)
         flags = []
+        unverified = []
         for a in extract_anchors(ans):
-            if verify(a, doc).status == "PASS":
+            v = verify(a, doc)
+            if v.status == "PASS":
                 session.record_claim(a)
+            elif v.status == "FLAG":
+                unverified.append(f"{a.kind} ({a.anchor})")
             else:
                 flags.append(f"{a.kind} ({a.anchor})")
-        suffix = f"\n[UNVERIFIED: {', '.join(flags)}]" if flags else ""
+        notes = []
+        if flags:
+            notes.append(f"CITATION FAILED: {', '.join(flags)}")
+        if unverified:
+            notes.append(f"unquoted, not verified: {', '.join(unverified)}")
+        suffix = f"\n[{'; '.join(notes)}]" if notes else ""
         render.append_qa(session, q, f"<p>{ans}{suffix}</p>")
-        output_fn(ans + (f"  ⚠ unverified: {', '.join(flags)}" if flags else ""))
+        output_fn(ans + (f"  ⚠ {'; '.join(notes)}" if notes else ""))
         transcript.append((q, ans))
     return transcript

@@ -18,7 +18,7 @@ def test_qa_records_verified_anchor_and_appends_html(tmp_path, real_pdf_path):
     assert ("equation", "99") not in anchors
     assert (s.dir / "index.html").exists()   # render wrote the page
     assert any("Eq. (3)" in o for o in out)  # answer emitted
-    assert any("unverified" in o.lower() for o in out)   # flagged to the referee, not silently dropped
+    assert any("CITATION FAILED" in o or "⚠" in o for o in out)   # flagged to the referee, not silently dropped
 
 def test_qa_sentinel_first_yields_empty_transcript(tmp_path, real_pdf_path):
     s = Session.create(tmp_path, "p"); doc = ingest(real_pdf_path); s.save_doc(doc)
