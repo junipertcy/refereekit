@@ -51,3 +51,14 @@ def test_two_quotes_two_pages():
         ("the lower band remains order one", "3"),
         ("a spectral plateau of width W", "7"),
     ]
+
+
+def test_offsets_bound_the_stripped_text():
+    """The returned offsets must slice out exactly the returned text,
+    even when the quotation carries surrounding whitespace."""
+    prose = 'The bound "  dampens all residual couplings  " holds on p. 7.'
+    spans = quoted_spans(prose)
+    assert len(spans) == 1
+    start, end, text = spans[0]
+    assert text == "dampens all residual couplings"
+    assert prose[start:end] == text

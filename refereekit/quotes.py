@@ -19,8 +19,16 @@ def quoted_spans(prose: str) -> list[tuple[int, int, str]]:
 
     Offsets bound the quoted text itself, not the surrounding quote marks.
     """
-    return [(m.start(1), m.end(1), m.group(1).strip())
-            for m in _QUOTED.finditer(prose)]
+    out = []
+    for m in _QUOTED.finditer(prose):
+        raw = m.group(1)
+        lead = len(raw) - len(raw.lstrip())
+        text = raw.strip()
+        if not text:
+            continue
+        start = m.start(1) + lead
+        out.append((start, start + len(text), text))
+    return out
 
 
 def pair_with_pages(prose: str) -> list[tuple[str, str]]:
