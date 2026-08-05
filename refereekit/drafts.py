@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from .types import Claim
 from .verify import verify
@@ -12,21 +13,20 @@ _EQ = re.compile(r"(?:\bEq\.?\s*|\bequation\s+)\((\d{1,3})\)", re.I)
 def extract_anchors(text: str) -> list[Claim]:
     """Find page and equation citations in prose.
 
-    A page citation that comes with a quotation carries that quotation, so it
-    can be checked against the manuscript. A bare page citation carries no
-    text and so verifies as FLAG (unverifiable), never PASS. Equation claims
-    are existence checks and carry no quotation.
+    A page citation with a quotation carries that quotation for verification.
+    A bare page citation is recorded with empty text. Equation claims are
+    existence checks and carry no quotation.
     """
     found = {}
-    quoted = {}          # anchor -> quotation, for pages cited with a quote
+    quoted = Counter()   # anchor -> count of quotations paired to it
     for quote, anchor in pair_with_pages(text):
-        quoted[anchor] = quote
+        quoted[anchor] += 1
         found[("page", anchor, quote)] = Claim(quote, "page", anchor)
-    for m in _PAGE.finditer(text):
-        anchor = m.group(1)
-        if anchor in quoted:
-            continue     # already recorded, with its quotation
-        found[("page", anchor, "")] = Claim("", "page", anchor)
+    all_pages = Counter(m.group(1) for m in _PAGE.finditer(text))
+    for anchor, total_count in all_pages.items():
+        bare_count = total_count - quoted[anchor]
+        for _ in range(bare_count):
+            found[("page", anchor, "")] = Claim("", "page", anchor)
     for m in _EQ.finditer(text):
         found[("equation", m.group(1), "")] = Claim("", "equation", m.group(1))
     return list(found.values())

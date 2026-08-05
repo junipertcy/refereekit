@@ -50,3 +50,22 @@ def test_two_quotes_two_page_claims():
     got = {c.anchor: c.text for c in extract_anchors(prose) if c.kind == "page"}
     assert got["3"] == "the lower band remains order one"
     assert got["7"] == "a spectral plateau of width W"
+
+
+def test_same_page_quoted_and_bare():
+    """A page cited both with and without a quotation yields both claims."""
+    prose = 'The estimator "dampens residuals" on p. 7. See also p. 7.'
+    claims = [c for c in extract_anchors(prose) if c.kind == "page"]
+    assert len(claims) == 2
+    texts = sorted(c.text for c in claims)
+    assert texts == ["", "dampens residuals"]
+    assert all(c.anchor == "7" for c in claims)
+
+
+def test_page_inside_quotation_creates_bare_claim():
+    """A page number appearing inside a quotation yields a bare claim."""
+    prose = 'They write "as shown on p. 7 the bound holds" on p. 9.'
+    claims = [c for c in extract_anchors(prose) if c.kind == "page"]
+    assert len(claims) == 2
+    anchors = {c.anchor for c in claims}
+    assert anchors == {"7", "9"}
