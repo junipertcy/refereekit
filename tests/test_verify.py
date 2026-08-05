@@ -7,11 +7,11 @@ def _first_real_eq_id(doc):
     return str(cands[0]) if cands else "1"
 
 def test_quote_on_correct_page_passes(sample_doc):
-    v = verify(Claim("prescribed degree-size sequences", "quote", "1"), sample_doc)
+    v = verify(Claim("Construction of Simplicial Complexes with Prescribed", "quote", "1"), sample_doc)
     assert v.status == "PASS"
 
 def test_quote_on_wrong_page_fails(sample_doc):
-    v = verify(Claim("prescribed degree-size sequences", "quote", "99"), sample_doc)
+    v = verify(Claim("Construction of Simplicial Complexes with Prescribed", "quote", "99"), sample_doc)
     assert v.status == "FAIL"
 
 def test_existing_equation_passes(real_doc):

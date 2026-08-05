@@ -1,11 +1,15 @@
 import re
-from .types import Claim, Verdict, Document
+from .types import Claim, Verdict, Document, MIN_EVIDENCE_WORDS
 
 def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 def verify(claim: Claim, doc: Document) -> Verdict:
     if claim.kind in ("quote", "page"):
+        words = _norm(claim.text).split()
+        if len(words) < MIN_EVIDENCE_WORDS:
+            return Verdict("FLAG", f"no quotation to verify: {len(words)} words, "
+                                   f"need {MIN_EVIDENCE_WORDS}")
         try:
             page_no = int(claim.anchor)
         except ValueError:

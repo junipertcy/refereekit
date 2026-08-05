@@ -7,7 +7,7 @@ def test_cli_ingest_then_verify(tmp_path, sample_pdf_path, capsys):
     assert (sess / "doc.json").exists()
     # a true quote on page 1 -> PASS, exit 0
     rc = main(["verify", "--session", str(sess), "--kind", "quote",
-               "--anchor", "1", "--text", "prescribed degree-size sequences"])
+               "--anchor", "1", "--text", "Construction of Simplicial Complexes with Prescribed"])
     out = capsys.readouterr().out
     assert rc == 0 and "PASS" in out
     # a false quote -> FAIL, exit 1

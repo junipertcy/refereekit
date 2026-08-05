@@ -46,3 +46,8 @@ class Claim:
 class Verdict:
     status: str  # PASS | FAIL | FLAG
     evidence: str
+
+# A quotation shorter than this cannot be evidence: short strings collide by
+# accident, and the empty string is a substring of every page. Claims below
+# this floor verify as FLAG (unverifiable), never PASS. See verify().
+MIN_EVIDENCE_WORDS = 4
