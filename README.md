@@ -22,6 +22,19 @@ committed or sent to any service.
     refereekit verify --session ./work/paperA --kind quote --anchor 16 --text "5-8%"
     refereekit serve  --session ./work/paperA --port 8888
 
+### Session layout
+
+    <session>/
+      doc.json        the ingested manuscript
+      state.json      claim pool and verdict
+      ours/           drafts we generated (report.txt, editor.txt)
+      theirs/         documents received from others (write-once)
+
+`ours/` and `theirs/` are separate because they are different kinds of thing.
+A co-referee's report is evidence; our own draft is not. Searching one for a
+phrase that lives in the other proves nothing, and a `report.txt` sitting
+loose in the session root gives no way to tell which one you are holding.
+
 ### Phase 2 (SP-B): Draft Generation
 Generate referee reports and editor letters using a verified claim pool.
 
@@ -41,7 +54,7 @@ Generate referee reports and editor letters using a verified claim pool.
     # Generate an editor response letter
     refereekit editor --session ./work/paperA --answers a=yes --answers b=no
 
-**Output:** Draft text is written to `<session>/drafts/report.txt` or `editor.txt`.
+**Output:** Draft text is written to `<session>/ours/report.txt` or `editor.txt`.
 The command prints a summary including flag count. Flags indicate anchors that failed
 verification (not in verified pool or failed re-verification against the document).
 
@@ -109,11 +122,35 @@ with a zero-retention LLM for real reviews.
     export REFEREEKIT_MODEL=claude-opus-4-8
     refereekit review paper.pdf --session ./work/paperA --venue PRX
 
-**Output:** Writes `<session>/report.txt`, `<session>/editor.txt`, and `<session>/index.html`.
+**Output:** Writes `<session>/ours/report.txt`, `<session>/ours/editor.txt`, and `<session>/index.html`.
 
 **Confidentiality note:** Manuscript text goes **only** to the zero-retention LLM backend
 during `review`. The session transcript, report, and editor letter remain in the session
 directory (git-ignored). No manuscript text is sent to memory or committed.
+
+## What a PASS means
+
+Verification is **quotation-scoped**. A `PASS` on a `page` or `quote` claim
+means: *these exact words, normalized for whitespace and case, are on that
+page.* Only text presented as a quotation is checked.
+
+A citation carrying no quotation verifies as `FLAG`, not `PASS` — the page
+exists, the wording was never checked. This is the common case: referee prose
+paraphrases the manuscript, and a paraphrase cannot be substring-matched. It
+is reported as unverified rather than treated as a failed citation.
+
+A `PASS` on an `equation` or `figure` claim is weaker and structural: that ID
+exists in the document. It says nothing about content.
+
+**What verification cannot do:** it cannot tell you whether a mathematical
+claim is true. "Is Eq. (25) an identity?" is not a substring question. That
+stays human work — write a script and check it.
+
+One more limit: a quotation shorter than four words is not verified. Quoted
+spans under 12 characters are skipped as scare-quoting, and a span that
+survives but carries fewer than four words verifies as `FLAG`. So a very
+short quoted phrase is reported unverified rather than checked. Four words
+is the floor at which a match stops being accidental.
 
 ## Extraction limits
 

@@ -34,8 +34,8 @@ In `./work/paperA/`:
 
 | File | What it is |
 |------|------------|
-| `report.txt`  | Your referee report, in your writing voice |
-| `editor.txt`  | Your response letter to the editor |
+| `ours/report.txt`  | Your referee report, in your writing voice |
+| `ours/editor.txt`  | Your response letter to the editor |
 | `index.html`  | The Q&A session with math rendered — open it in a browser |
 
 Edit the drafts freely — they're a starting point in your voice, not a final answer.
