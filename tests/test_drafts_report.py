@@ -1,5 +1,5 @@
 # tests/test_drafts_report.py
-from refereekit.drafts import report, Draft, build_prompt
+from refereekit.drafts import report, Draft, build_prompt, build_editor_prompt
 from refereekit.llm import FakeBackend
 from refereekit.session import Session
 from refereekit.types import Claim
@@ -99,3 +99,32 @@ def test_report_without_memory_still_works(tmp_path, real_doc):
                style_path="style/STYLE.md")
     assert isinstance(d, Draft)
     assert d.text == "draft text"
+
+
+def test_prompt_shows_the_verified_quotation():
+    pool = {"claims": [Claim("a spectral plateau of width W", "page", "7")],
+            "verdict": {}}
+    out = build_prompt(pool, "voice", {})
+    assert "a spectral plateau of width W" in out
+    assert "page (7)" in out
+
+
+def test_prompt_separates_unverified_pointers():
+    pool = {"claims": [Claim("a spectral plateau of width W", "page", "7"),
+                       Claim("", "page", "15")],
+            "verdict": {}}
+    out = build_prompt(pool, "voice", {})
+    assert "VERIFIED QUOTATIONS" in out
+    assert "UNVERIFIED POINTERS" in out
+    # The quotation appears under the verified heading, p.15 under the other.
+    verified, unverified = out.split("UNVERIFIED POINTERS", 1)
+    assert "page (7)" in verified
+    assert "page (15)" in unverified
+    assert "page (7)" not in unverified
+
+
+def test_editor_prompt_shows_the_quotation_too():
+    pool = {"claims": [Claim("a spectral plateau of width W", "page", "7")],
+            "verdict": {}}
+    out = build_editor_prompt(pool, "voice", {"a": "yes"})
+    assert "a spectral plateau of width W" in out
