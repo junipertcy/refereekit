@@ -97,6 +97,58 @@ def test_length_applies_only_to_its_own_field(tmp_path, real_pdf_path):
     assert "summary=short" not in seen["weaknesses"]
 
 
+def _fetched_only(tmp_path, real_pdf_path):
+    """A session as or-fetch leaves it: paper and form, no claims, no verdict.
+
+    or-fetch records venue, number, forum and invitation_id. Claims and the
+    verdict are recorded by the review loop, so this is what or-draft sees
+    when the review pass has not been run.
+    """
+    s = Session.create(tmp_path, "p")
+    s.save_doc(ingest(real_pdf_path))
+    return s
+
+
+def test_a_session_with_no_claims_refuses_to_draft(tmp_path, real_pdf_path):
+    """Drafting from an empty pool sends the model no verified quotation and no
+    verdict, so every field comes back confabulated while the command reports
+    success. An empty pool is an input error, not a citation problem."""
+    s = _fetched_only(tmp_path, real_pdf_path)
+    with pytest.raises(ValueError, match="no verified claims"):
+        orfill.fill(s, _form(), backend=FakeBackend("prose"), style_path=STYLE)
+
+
+def test_the_refusal_names_the_command_that_fills_the_pool(tmp_path,
+                                                           real_pdf_path):
+    """The referee needs the next command, not a diagnosis."""
+    s = _fetched_only(tmp_path, real_pdf_path)
+    with pytest.raises(ValueError) as ei:
+        orfill.fill(s, _form(), backend=FakeBackend("prose"), style_path=STYLE)
+    assert f"refereekit review {s.dir}/paper.pdf" in str(ei.value)
+    assert f"--session {s.dir}" in str(ei.value)
+
+
+def test_an_empty_pool_is_refused_before_any_backend_call(tmp_path,
+                                                          real_pdf_path):
+    """Raised before the first model call, so the failure costs nothing."""
+    s = _fetched_only(tmp_path, real_pdf_path)
+    calls = []
+    with pytest.raises(ValueError):
+        orfill.fill(s, _form(), style_path=STYLE,
+                    backend=FakeBackend(lambda p: calls.append(p) or "prose"))
+    assert calls == []
+
+
+def test_a_verdict_with_no_claims_still_drafts(tmp_path, real_pdf_path):
+    """A verdict on its own is a real pool: the referee reached a
+    recommendation without needing to quote the manuscript."""
+    s = _fetched_only(tmp_path, real_pdf_path)
+    s.set_state("verdict", {"recommend": "minor"})
+    got = orfill.fill(s, _form(), backend=FakeBackend("prose"),
+                      style_path=STYLE)
+    assert got.values["summary"] == "prose"
+
+
 def test_unknown_length_name_is_an_error(tmp_path, real_pdf_path):
     """A typo, or a form that differs from the one the referee expected. Both
     are worth hearing about rather than silently ignoring."""

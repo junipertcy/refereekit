@@ -41,6 +41,27 @@ def _dedupe(flags: list) -> list:
     return out
 
 
+def validate_pool(session) -> None:
+    """Refuse to draft from a session that has been fetched but not reviewed.
+
+    or-fetch records the venue, the number and the forum; claims and the
+    verdict come from the review loop. Drafting without one sends the model no
+    verified quotation and no verdict, so every field would be invented while
+    the command reported success. That inverts the discipline the rest of the
+    package exists to enforce, so it is refused rather than flagged: an empty
+    pool is an input error, not a citation problem.
+
+    Exposed so cli.py can check before constructing a backend, and called by
+    fill so the rule holds however fill is reached.
+    """
+    pool = drafts.build_pool(session)
+    if pool["claims"] or pool["verdict"]:
+        return
+    raise ValueError(
+        f"no verified claims in this session; run refereekit review "
+        f"{session.dir / 'paper.pdf'} --session {session.dir} first")
+
+
 def fill(session, form, *, backend, style_path, lengths=None,
          memory=None, venue=None) -> FilledForm:
     """One backend call per prose field.
@@ -54,6 +75,7 @@ def fill(session, form, *, backend, style_path, lengths=None,
     if unknown:
         raise ValueError(
             f"--length names no field in this form: {', '.join(unknown)}")
+    validate_pool(session)
     verdict = session.get_state("verdict", {})
     values, flags = {}, []
     for f in form.prose_fields():

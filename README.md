@@ -155,12 +155,25 @@ of shell history and the process table:
     refereekit or-fetch --venue ICLR.cc/2027/Conference --number 42 \
         --session ./work/iclr-42
 
+    # read the paper and build the verified claim pool (step 2 of 3)
+    refereekit review ./work/iclr-42/paper.pdf --session ./work/iclr-42 \
+        --venue ICLR.cc/2027/Conference
+
     # draft the prose fields
     export REFEREEKIT_ZERO_RETENTION=1
     refereekit or-draft --session ./work/iclr-42 [--length summary=short]
 
     # summarize what the authors said back
     refereekit or-responses --session ./work/iclr-42
+
+**`or-draft` requires a `review` pass first, in the same session directory.**
+Drafting is three steps, not two: `or-fetch` downloads the paper and the form,
+`review` reads the paper with you and records the verified claims and your
+verdict, and `or-draft` writes the form's prose fields from that pool. There is
+no shortcut, because the pool is what the prose is built from: `or-draft` on a
+session that has only been fetched exits 2 and names the `review` command to
+run. Running `review` into a fetched session leaves `venue`, `number`, `forum`,
+and `form.json` in place, so the order above is the whole sequence.
 
 **Output:** `ours/openreview.md` for reading and pasting, `ours/openreview.json`
 as a field-name-to-value mapping, and `ours/response-analysis.txt`.

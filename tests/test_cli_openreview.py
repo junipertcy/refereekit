@@ -148,6 +148,41 @@ def test_or_draft_writes_markdown_and_json(monkeypatch, tmp_path,
     assert "to fill in yourself" in out and "rating" in out
 
 
+def test_or_draft_on_a_freshly_fetched_session_refuses_to_confabulate(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """or-fetch records venue, number and forum; the claim pool comes from a
+    review pass. Without one, every field would be drafted from an empty pool
+    and the command would report success. It must exit 2 and name the command
+    that fills the pool instead."""
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    rc = main(["or-draft", "--session", str(sess)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "no verified claims" in err
+    assert f"refereekit review {sess}/paper.pdf --session {sess}" in err
+    assert not (sess / "ours" / "openreview.md").exists()
+
+
+def test_or_draft_refuses_an_empty_pool_before_building_a_backend(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """An empty pool is an input error, so it is reported before a backend is
+    constructed: a missing optional extra must not mask it."""
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    import refereekit.cli as climod
+
+    def no_backend():
+        raise ModuleNotFoundError("No module named 'anthropic'")
+    monkeypatch.setattr(climod, "_backend", no_backend)
+    rc = main(["or-draft", "--session", str(sess)])
+    assert rc == 2
+    assert "no verified claims" in capsys.readouterr().err
+
+
 def test_or_draft_without_a_form_says_to_fetch_first(tmp_path, capsys):
     s = Session.create(tmp_path, "s")
     rc = main(["or-draft", "--session", str(s.dir)])

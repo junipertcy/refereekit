@@ -277,6 +277,10 @@ def main(argv=None) -> int:
                 print("error: --length takes name=value, "
                       "e.g. --length summary=short", file=sys.stderr)
                 return 2
+            # Before _backend() for the same reason: a session with no claim
+            # pool is an input error, and the referee needs the command that
+            # fills it rather than a report about their install.
+            orfill.validate_pool(s)
             backend = _backend()
             filled = orfill.fill(s, form, backend=backend,
                                  style_path=style_path, lengths=lengths)

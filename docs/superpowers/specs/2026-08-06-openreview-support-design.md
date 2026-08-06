@@ -107,6 +107,10 @@ or-fetch --venue V                      or-fetch --venue V --number 42
                                                 |
                                           theirs/<note-id>-<tcdate>.txt
 
+review <session>/paper.pdf --session S
+        |
+   claims + verdict into state.json
+
 or-draft --session S                    or-responses --session S
         |                                        |
    form.json + verified claim pool        theirs/ + ours/report.txt
@@ -269,7 +273,18 @@ refereekit or-draft --session ./work/iclr-42 [--style PATH] [--length summary=sh
 
 Reads `form.json` and `doc.json`, drafts every prose field, writes
 `ours/openreview.md` (for reading and pasting) and `ours/openreview.json` (the
-field-name-to-value mapping, for a future poster or a diff). Prints a summary:
+field-name-to-value mapping, for a future poster or a diff).
+
+The verified claim pool comes from a `review` pass over the fetched PDF in the
+same session directory: `refereekit review <session>/paper.pdf --session
+<session>`. `or-fetch` records the venue, the number and the forum, and the
+review loop is what records claims and the verdict, so the OpenReview path is
+three commands rather than two. `or-draft` on a session that has been fetched
+but not reviewed exits 2 and names that command. It does not draft from an
+empty pool: every field would be invented while the command reported success,
+which is a worse failure than refusing.
+
+Prints a summary:
 
 ```
 openreview: 4 prose field(s) drafted, 2 flag(s)
@@ -457,6 +472,7 @@ Follows the established pattern: catch specific exceptions, print
 | Review stage not open | warning, not an error: `no review form yet at <invitation>; skipping form.json` |
 | No replies yet | warning: `no replies yet; theirs/ left empty` |
 | `or-draft` with no `form.json` | `no form.json; run or-fetch --number first` |
+| `or-draft` with no claim pool | `no verified claims in this session; run refereekit review <session>/paper.pdf --session <session> first` |
 | `or-responses` with empty `theirs/` | `no received notes in theirs/; nothing to analyze` |
 
 `openreview.OpenReviewException` is caught at the `client.py` boundary and
