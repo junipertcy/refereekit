@@ -128,6 +128,80 @@ with a zero-retention LLM for real reviews.
 during `review`. The session transcript, report, and editor letter remain in the session
 directory (git-ignored). No manuscript text is sent to memory or committed.
 
+### Phase 5 (SP-E): OpenReview
+
+Review a paper assigned on OpenReview. Fetch the assignment and its PDF,
+discover the venue's review form, draft the form's prose fields, and summarize
+the authors' responses.
+
+**Read-only.** refereekit never posts to OpenReview. There is no
+`post_note_edit` call in the package. Output is written locally for you to read
+and paste.
+
+**Install:** `pip install -e ".[openreview]"`
+
+**Credentials** come from the environment, never a flag, so a password stays out
+of shell history and the process table:
+
+    export OPENREVIEW_USERNAME=you@example.com
+    export OPENREVIEW_PASSWORD=...
+
+**Commands:**
+
+    # list the papers assigned to you
+    refereekit or-fetch --venue ICLR.cc/2027/Conference --session ./work/iclr
+
+    # fetch one: paper.pdf, doc.json, form.json, and theirs/
+    refereekit or-fetch --venue ICLR.cc/2027/Conference --number 42 \
+        --session ./work/iclr-42
+
+    # draft the prose fields
+    export REFEREEKIT_ZERO_RETENTION=1
+    refereekit or-draft --session ./work/iclr-42 [--length summary=short]
+
+    # summarize what the authors said back
+    refereekit or-responses --session ./work/iclr-42
+
+**Output:** `ours/openreview.md` for reading and pasting, `ours/openreview.json`
+as a field-name-to-value mapping, and `ours/response-analysis.txt`.
+
+**Ratings are never filled in.** Verification is quotation-scoped substring
+matching. It can confirm that a quoted phrase is on a page; it cannot tell a
+soundness of 3 from a 4. Every field the venue defines with a fixed set of
+choices comes back empty, listed for you under "to fill in yourself".
+
+**The review form is discovered at runtime.** An OpenReview invitation is
+self-describing, so ICLR's summary/strengths/weaknesses/soundness/presentation/
+contribution and the default form's title/review/rating/confidence both work
+with no venue-specific code. A field is classified by whether the invitation
+gives it a fixed set of choices, not by its name.
+
+**Revised rebuttals.** Received notes are stored in `theirs/` as
+`<note-id>-<tcdate>.txt`. A rebuttal edited during the discussion period has a
+new timestamp and so becomes a new file: both versions are kept and you can see
+what changed. Replies you signed yourself are not stored in `theirs/`, because
+that directory is for documents received from others.
+
+**Venue LLM policies differ, and refereekit does not check or enforce them.**
+Compliance is yours. Two current examples, worth knowing before you run
+`or-draft`:
+
+- **NeurIPS 2025** prohibits it: "You must keep everything relating to the
+  review process confidential. Do not talk about or share submissions with
+  anyone or any LLMs." Zero-retention API terms do not create an exception; the
+  prohibition is on sharing at all, not on retention.
+- **ICLR 2027** permits limited use but makes disclosure mandatory. If you use
+  an LLM to generate or edit any portion of a review, you must report your
+  original self-written assessment and your LLM interactions in an accompanying
+  textbox, and the review form asks for it.
+
+**Confidentiality.** Many venues restrict submissions to assigned reviewers. A
+fetched submission is confidential manuscript text: keep it under the
+git-ignored `work/` tree, never commit it, and send it only to a zero-retention
+backend. `form.json` is venue configuration and carries no manuscript text.
+`openreview.md`, `openreview.json`, and `response-analysis.txt` are derived from
+the manuscript and are never committed, exactly like `report.txt`.
+
 ## What a PASS means
 
 Verification is **quotation-scoped**. A `PASS` on a `page` or `quote` claim

@@ -1,0 +1,189 @@
+import json
+from pathlib import Path
+
+from refereekit.cli import main
+from refereekit.ingest import ingest
+from refereekit.openreview import client as orclient
+from refereekit.session import Session
+from refereekit.types import Claim
+from tests.openreview_fakes import FakeEdge, FakeGroup, FakeNote, FakeORClient
+
+VENUE = "Test.cc/2027/Conference"
+
+
+def _fake_client(real_pdf_path, **kw):
+    note = FakeNote(id="note-42", number=42,
+                    content={"title": {"value": "A Paper"},
+                             "pdf": {"value": "/pdf/a.pdf"}})
+    inv = json.loads(
+        Path("tests/fixtures/openreview_iclr_form.json").read_text())
+    defaults = dict(notes={42: note}, edges=[FakeEdge(head="note-42")],
+                    invitation=inv, pdf=real_pdf_path.read_bytes(),
+                    groups=[FakeGroup(id=f"{VENUE}/Submission42/Reviewer_me1")])
+    defaults.update(kw)
+    return FakeORClient(**defaults)
+
+
+def _patch(monkeypatch, client):
+    monkeypatch.setattr(orclient, "make_client", lambda baseurl=None: client)
+
+
+def test_or_fetch_lists_assignments(monkeypatch, tmp_path, real_pdf_path, capsys):
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    rc = main(["or-fetch", "--venue", VENUE, "--session", str(tmp_path / "s")])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "42" in out and "A Paper" in out
+
+
+def test_or_fetch_with_no_assignments_says_so(monkeypatch, tmp_path,
+                                              real_pdf_path, capsys):
+    _patch(monkeypatch, _fake_client(real_pdf_path, edges=[]))
+    rc = main(["or-fetch", "--venue", VENUE, "--session", str(tmp_path / "s")])
+    assert rc == 0
+    assert "no assignments" in capsys.readouterr().out
+
+
+def test_or_fetch_number_writes_pdf_doc_and_form(monkeypatch, tmp_path,
+                                                 real_pdf_path, capsys):
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    rc = main(["or-fetch", "--venue", VENUE, "--number", "42",
+               "--session", str(sess)])
+    assert rc == 0
+    assert (sess / "paper.pdf").exists()
+    assert (sess / "doc.json").exists()
+    form = json.loads((sess / "form.json").read_text())
+    assert form["invitation_id"].endswith("Submission42/-/Official_Review")
+    assert Session(sess).get_state("venue") == VENUE
+    assert Session(sess).get_state("number") == 42
+
+
+def test_or_fetch_stores_replies_but_not_our_own(monkeypatch, tmp_path,
+                                                 real_pdf_path):
+    mine = f"{VENUE}/Submission42/Reviewer_me1"
+    replies = [
+        {"id": "r-them", "tcdate": 1700000000000, "signatures": ["~Author_One1"],
+         "invitations": [f"{VENUE}/Submission42/-/Rebuttal"],
+         "content": {"comment": {"value": "We revised Sec. 3."}}},
+        {"id": "r-mine", "tcdate": 1700000000000, "signatures": [mine],
+         "invitations": [f"{VENUE}/Submission42/-/Official_Review"],
+         "content": {"review": {"value": "my own review"}}},
+    ]
+    _patch(monkeypatch, _fake_client(real_pdf_path, replies=replies))
+    sess = tmp_path / "s"
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+    names = [p.name for p in (sess / "theirs").iterdir()]
+    assert names == ["r-them-1700000000000.txt"]
+
+
+def test_or_fetch_before_the_review_stage_still_gets_the_pdf(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    _patch(monkeypatch, _fake_client(real_pdf_path, invitation=None))
+    sess = tmp_path / "s"
+    rc = main(["or-fetch", "--venue", VENUE, "--number", "42",
+               "--session", str(sess)])
+    assert rc == 0
+    assert (sess / "doc.json").exists()
+    assert not (sess / "form.json").exists()
+    assert "no review form yet" in capsys.readouterr().out
+
+
+def test_or_fetch_reports_an_or_error_as_exit_2(monkeypatch, tmp_path, capsys):
+    def boom(baseurl=None):
+        raise orclient.ORError("set OPENREVIEW_USERNAME and OPENREVIEW_PASSWORD")
+    monkeypatch.setattr(orclient, "make_client", boom)
+    rc = main(["or-fetch", "--venue", VENUE, "--session", str(tmp_path / "s")])
+    assert rc == 2
+    assert "OPENREVIEW_USERNAME" in capsys.readouterr().err
+
+
+def test_or_fetch_baseurl_reaches_the_client(monkeypatch, tmp_path, real_pdf_path):
+    seen = {}
+    c = _fake_client(real_pdf_path)
+    monkeypatch.setattr(orclient, "make_client",
+                        lambda baseurl=None: seen.setdefault("u", baseurl) or c)
+    main(["or-fetch", "--venue", VENUE, "--session", str(tmp_path / "s"),
+          "--baseurl", "https://devapi2.openreview.net"])
+    assert seen["u"] == "https://devapi2.openreview.net"
+
+
+def test_or_fetch_on_a_download_that_is_not_a_pdf_exits_2(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """A truncated or error-page download must not leave a half-built session
+    passing for a fetched paper."""
+    _patch(monkeypatch, _fake_client(real_pdf_path, pdf=b"<html>error</html>"))
+    sess = tmp_path / "s"
+    rc = main(["or-fetch", "--venue", VENUE, "--number", "42",
+               "--session", str(sess)])
+    assert rc == 2
+    assert not (sess / "doc.json").exists()
+    assert capsys.readouterr().err.startswith("error:")
+
+
+def _fetched_session(monkeypatch, tmp_path, real_pdf_path):
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    s = Session(sess)
+    s.record_claim(Claim("", "page", "3"))
+    s.set_state("verdict", {"recommend": "minor"})
+    return sess
+
+
+def test_or_draft_writes_markdown_and_json(monkeypatch, tmp_path,
+                                           real_pdf_path, capsys):
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Drafted prose.")
+    rc = main(["or-draft", "--session", str(sess)])
+    assert rc == 0
+    md = (sess / "ours" / "openreview.md").read_text()
+    assert "## summary" in md and "Drafted prose." in md
+    payload = json.loads((sess / "ours" / "openreview.json").read_text())
+    assert payload["summary"] == "Drafted prose."
+    assert payload["rating"] == ""
+    out = capsys.readouterr().out
+    assert "to fill in yourself" in out and "rating" in out
+
+
+def test_or_draft_without_a_form_says_to_fetch_first(tmp_path, capsys):
+    s = Session.create(tmp_path, "s")
+    rc = main(["or-draft", "--session", str(s.dir)])
+    assert rc == 2
+    assert "run or-fetch --number first" in capsys.readouterr().err
+
+
+def test_or_draft_with_an_unknown_length_name_exits_2(monkeypatch, tmp_path,
+                                                      real_pdf_path, capsys):
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    rc = main(["or-draft", "--session", str(sess), "--length", "nope=short"])
+    assert rc == 2
+    assert "nope" in capsys.readouterr().err
+
+
+def test_or_responses_writes_the_analysis(monkeypatch, tmp_path,
+                                         real_pdf_path, capsys):
+    mine = f"{VENUE}/Submission42/Reviewer_me1"
+    replies = [{"id": "r-them", "tcdate": 1700000000000,
+                "signatures": ["~Author_One1"],
+                "invitations": [f"{VENUE}/Submission42/-/Rebuttal"],
+                "content": {"comment": {"value": "We revised Sec. 3."}}}]
+    _patch(monkeypatch, _fake_client(real_pdf_path, replies=replies))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "They addressed point one.")
+    rc = main(["or-responses", "--session", str(sess)])
+    assert rc == 0
+    assert (sess / "ours" / "response-analysis.txt").read_text() == \
+        "They addressed point one."
+
+
+def test_or_responses_with_nothing_received_exits_2(tmp_path, capsys):
+    s = Session.create(tmp_path, "s")
+    rc = main(["or-responses", "--session", str(s.dir)])
+    assert rc == 2
+    assert "nothing to analyze" in capsys.readouterr().err

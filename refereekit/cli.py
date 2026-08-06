@@ -5,7 +5,7 @@ import pymupdf
 from .ingest import ingest
 from .verify import verify
 from .types import Claim
-from .session import Session
+from .session import Session, ProvenanceError
 from . import render
 from .memory import SQLiteMemoryStore, Note
 from .guard import ManuscriptLeakError
@@ -59,6 +59,17 @@ def main(argv=None) -> int:
     prv.add_argument("--venue")
     prv.add_argument("--db")
     prv.add_argument("--style", default=None)
+    pof = sub.add_parser("or-fetch")
+    pof.add_argument("--venue", required=True)
+    pof.add_argument("--session", required=True)
+    pof.add_argument("--number", type=int)
+    pof.add_argument("--baseurl", default=None)
+    pod = sub.add_parser("or-draft")
+    pod.add_argument("--session", required=True)
+    pod.add_argument("--length", action="append", default=[])
+    pod.add_argument("--style", default=None)
+    por = sub.add_parser("or-responses")
+    por.add_argument("--session", required=True)
 
     args = ap.parse_args(argv)
 
@@ -160,5 +171,125 @@ def main(argv=None) -> int:
             return 2
         print(f"review complete: {res.report_path}, {res.editor_path} ({len(res.flags)} flag(s))")
         return 0
+
+    if args.cmd == "or-fetch":
+        from .openreview import client as orclient
+        from .openreview import form as orform
+        try:
+            c = orclient.make_client(args.baseurl or orclient.BASEURL)
+            if args.number is None:
+                found = orclient.list_assignments(c, args.venue)
+                if not found:
+                    print(f"no assignments for you at {args.venue}")
+                    return 0
+                for a in found:
+                    print(f"  {a.number:>4}  {a.title}")
+                print("Fetch one with: --number <N>")
+                return 0
+            sdir = Path(args.session)
+            s = Session.create(sdir.parent, sdir.name)
+            pdf_bytes, forum = orclient.fetch_submission(c, args.venue, args.number)
+            # pymupdf sniffs the content type, so an html error page opens as an
+            # html document and ingests as one page of text rather than raising.
+            # Only the magic bytes distinguish that from a real paper, and a
+            # session built from an error page would pass for a fetched one.
+            if not pdf_bytes.startswith(b"%PDF"):
+                raise ValueError(
+                    f"the download for submission {args.number} is not a pdf "
+                    f"({len(pdf_bytes)} bytes); nothing was written")
+            pdf_path = s.dir / "paper.pdf"
+            pdf_path.write_bytes(pdf_bytes)
+            doc = ingest(pdf_path)
+            s.save_doc(doc)
+            print(f"fetched submission {args.number}: {len(doc.pages)} pages")
+            s.set_state("venue", args.venue)
+            s.set_state("number", args.number)
+            s.set_state("forum", forum)
+            # Best-effort from here. Before the review stage opens there is no
+            # invitation, and before the rebuttal period there are no replies.
+            # Neither is an error: the pdf is the part the referee needs first.
+            form = orclient.fetch_form(c, args.venue, args.number)
+            if form is None:
+                print(f"no review form yet at {args.venue}/Submission"
+                      f"{args.number}/-/Official_Review; skipping form.json")
+            else:
+                (s.dir / "form.json").write_text(orform.to_json(form))
+                s.set_state("invitation_id", form.invitation_id)
+                print(f"review form: {len(form.prose_fields())} prose field(s), "
+                      f"{len(form.choice_fields())} to fill in yourself")
+            replies = orclient.fetch_replies(c, forum)
+            if not replies:
+                print("no replies yet; theirs/ left empty")
+            else:
+                mine = orclient.our_group_ids(c, args.venue, args.number)
+                written, skipped = orclient.store_replies(s, replies, mine)
+                print(f"theirs/: {len(written)} new, {len(skipped)} unchanged")
+            return 0
+        except (orclient.ORError, FileNotFoundError, ValueError,
+                ProvenanceError, pymupdf.FileNotFoundError,
+                pymupdf.FileDataError) as e:
+            # FileDataError: the download returned bytes that are not a PDF.
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if args.cmd == "or-draft":
+        from .llm import RetentionError
+        from .openreview import fill as orfill
+        from .openreview import form as orform
+        try:
+            s = Session(Path(args.session))
+            form_path = s.dir / "form.json"
+            if not form_path.exists():
+                print("error: no form.json; run or-fetch --number first",
+                      file=sys.stderr)
+                return 2
+            form = orform.from_json(form_path.read_text())
+            style_path = (args.style or os.environ.get("REFEREEKIT_STYLE")
+                          or str(_DEFAULT_STYLE))
+            filled = orfill.fill(s, form, backend=_backend(),
+                                 style_path=style_path,
+                                 lengths=dict(x.split("=", 1) for x in args.length))
+            s.our_draft("openreview.md").write_text(orfill.to_markdown(form, filled))
+            s.our_draft("openreview.json").write_text(orfill.to_json(filled))
+            print(f"openreview: {len(filled.values)} prose field(s) drafted, "
+                  f"{len(filled.flags)} flag(s)")
+            for f in filled.flags:
+                print(f"  FLAG {f.kind} ({f.anchor}): {f.reason}")
+            print("to fill in yourself:")
+            for f in filled.blanks:
+                span = (f"({f.enum[-1][0]}-{f.enum[0][0]})" if f.enum else f"({f.type})")
+                print(f"  {f.name:<24} {span:<10} {f.description[:48]}")
+            return 0
+        except (FileNotFoundError, ValueError, RetentionError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if args.cmd == "or-responses":
+        from .llm import RetentionError
+        from .openreview import responses as orresponses
+        try:
+            s = Session(Path(args.session))
+            received = [p.read_text() for p in sorted(s.theirs_dir.iterdir())
+                        if p.is_file()]
+            # Checked before constructing a backend: an empty theirs/ is an
+            # input error, and it should not first fail on a missing API key.
+            if not received:
+                print("error: no received notes in theirs/; nothing to analyze",
+                      file=sys.stderr)
+                return 2
+            ours = ""
+            for name in ("openreview.md", "report.txt"):
+                p = s.ours_dir / name
+                if p.exists():
+                    ours = p.read_text()
+                    break
+            text = orresponses.analyze(ours, received, backend=_backend())
+            out = s.our_draft("response-analysis.txt")
+            out.write_text(text)
+            print(f"wrote {out} ({len(received)} received note(s))")
+            return 0
+        except (FileNotFoundError, ValueError, RetentionError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
 
     return 2
