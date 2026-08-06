@@ -158,6 +158,14 @@ def test_unknown_length_name_is_an_error(tmp_path, real_pdf_path):
                     lengths={"nosuchfield": "short"})
 
 
+def test_validate_lengths_is_callable_without_a_session_or_a_backend():
+    """Exposed so cli.py can check the flag before constructing a backend, and
+    kept in one place so fill() and the CLI cannot disagree."""
+    with pytest.raises(ValueError, match="nosuchfield"):
+        orfill.validate_lengths(_form(), {"nosuchfield": "short"})
+    orfill.validate_lengths(_form(), {"summary": "short"})
+
+
 def test_flags_are_deduplicated_across_fields(tmp_path, real_pdf_path):
     """The same unpooled anchor cited in two fields is one problem, not two."""
     s = _session(tmp_path, real_pdf_path)

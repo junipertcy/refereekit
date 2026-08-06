@@ -86,6 +86,7 @@ def main(argv=None) -> int:
     pod.add_argument("--session", required=True)
     pod.add_argument("--length", action="append", default=[])
     pod.add_argument("--style", default=None)
+    pod.add_argument("--db")
     por = sub.add_parser("or-responses")
     por.add_argument("--session", required=True)
 
@@ -211,6 +212,18 @@ def main(argv=None) -> int:
                     print("Fetch one with: --number <N>")
                 return 0
             sdir = Path(args.session)
+            # Checked before Session.create, which is exist_ok: fetching a
+            # second paper into a session would overwrite paper.pdf, doc.json
+            # and form.json, leave theirs/ holding both papers' notes, and
+            # leave a stale ours/openreview.md that or-responses would read as
+            # our review of the new paper. put_theirs cannot catch it because
+            # the filenames are legitimately distinct. Re-fetching the same
+            # number is the normal way to pick up a new rebuttal.
+            had = Session(sdir).get_state("number")
+            if had is not None and had != args.number:
+                raise ValueError(
+                    f"session {sdir} holds submission {had}, not {args.number}; "
+                    f"use a fresh --session directory for a different paper")
             s = Session.create(sdir.parent, sdir.name)
             pdf_bytes, forum = orclient.fetch_submission(c, args.venue, args.number)
             # pymupdf sniffs the content type, so an html error page opens as an
@@ -243,8 +256,12 @@ def main(argv=None) -> int:
             else:
                 (s.dir / "form.json").write_text(orform.to_json(form))
                 s.set_state("invitation_id", form.invitation_id)
+                # The same count or-draft prints under the same phrase: choices
+                # plus the fields that are neither prose nor choice, since the
+                # referee fills those in too.
+                blanks = len(form.choice_fields()) + len(form.other_fields())
                 print(f"review form: {len(form.prose_fields())} prose field(s), "
-                      f"{len(form.choice_fields())} to fill in yourself")
+                      f"{blanks} to fill in yourself")
             replies, why = orclient.fetch_replies(c, forum)
             if why:
                 print(f"could not read the discussion for {forum} ({why}); "
@@ -302,13 +319,23 @@ def main(argv=None) -> int:
                 print("error: --length takes name=value, "
                       "e.g. --length summary=short", file=sys.stderr)
                 return 2
-            # Before _backend() for the same reason: a session with no claim
-            # pool is an input error, and the referee needs the command that
-            # fills it rather than a report about their install.
+            # Before _backend() for the same reason: an unknown field name and
+            # a session with no claim pool are both input errors, and the
+            # referee needs the typo or the next command rather than a report
+            # about their install.
+            orfill.validate_lengths(form, lengths)
             orfill.validate_pool(s)
+            # The venue or-fetch recorded, so the accumulated voice and verdict
+            # patterns for it reach the draft, exactly as they do under review.
+            # Same --db default as review, which is where the review pass this
+            # session required will have written them.
+            venue = s.get_state("venue")
+            db = args.db or str(s.dir / "memory.db")
+            mem = SQLiteMemoryStore(db) if venue else None
             backend = _backend()
             filled = orfill.fill(s, form, backend=backend,
-                                 style_path=style_path, lengths=lengths)
+                                 style_path=style_path, lengths=lengths,
+                                 memory=mem, venue=venue)
             s.our_draft("openreview.md").write_text(orfill.to_markdown(form, filled))
             s.our_draft("openreview.json").write_text(orfill.to_json(filled))
             print(f"openreview: {len(filled.values)} prose field(s) drafted, "
@@ -320,7 +347,7 @@ def main(argv=None) -> int:
                 print(f"  {f.name:<24} {_blank_span(f):<10} {f.description[:48]}")
             return 0
         except (FileNotFoundError, ValueError, RetentionError,
-                ImportError) as e:
+                sqlite3.OperationalError, ImportError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
 

@@ -80,6 +80,16 @@ def test_iclr_choice_fields_include_every_rating():
         assert expected in names
 
 
+def test_an_enumless_array_field_is_not_prose():
+    """prose_fields tested type.startswith('string'), so a string[] with no
+    enum was classified as prose and would have been drafted as flowing prose
+    into a field expecting a list. other_fields surfaces it instead."""
+    f = orform.parse_form({"id": "x", "edit": {"note": {"content": {
+        "keywords": {"value": {"param": {"type": "string[]"}}, "order": 1}}}}})
+    assert [x.name for x in f.prose_fields()] == []
+    assert [x.name for x in f.other_fields()] == ["keywords"]
+
+
 def test_file_field_is_neither_prose_nor_choice():
     """An enum-less non-string is nothing we can draft, so it is reported to
     the referee rather than silently dropped."""

@@ -4,6 +4,7 @@ from pathlib import Path
 from refereekit.cli import main
 from refereekit.ingest import ingest
 from refereekit.llm import FakeBackend
+from refereekit.memory import Note, SQLiteMemoryStore
 from refereekit.openreview import client as orclient
 from refereekit.session import Session
 from refereekit.types import Claim
@@ -221,6 +222,77 @@ def test_or_fetch_on_a_download_that_is_not_a_pdf_exits_2(
     assert capsys.readouterr().err.startswith("error:")
 
 
+def test_or_fetch_refuses_to_repoint_a_session_at_another_paper(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """Session.create is exist_ok, so fetching 42 then 43 into the same session
+    overwrote paper.pdf, doc.json and form.json, left theirs/ holding both
+    papers' notes, and left a stale ours/openreview.md that or-responses would
+    read as our review of the wrong paper."""
+    note43 = FakeNote(id="note-43", number=43,
+                      content={"title": {"value": "Another Paper"},
+                               "pdf": {"value": "/pdf/b.pdf"}})
+    c = _fake_client(real_pdf_path)
+    c._notes[43] = note43
+    _patch(monkeypatch, c)
+    sess = tmp_path / "s"
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+    rc = main(["or-fetch", "--venue", VENUE, "--number", "43",
+               "--session", str(sess)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "42" in err and "43" in err
+    assert Session(sess).get_state("number") == 42
+
+
+def test_refetching_the_same_number_into_the_same_session_still_works(
+        monkeypatch, tmp_path, real_pdf_path):
+    """The normal way to pick up a new rebuttal."""
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+
+
+def test_or_fetch_and_or_draft_agree_on_how_many_fields_you_fill_in(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """Both print the same phrase about the same form in the same session, so
+    they must print the same number."""
+    _patch(monkeypatch, _fake_client(real_pdf_path))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    fetched = capsys.readouterr().out
+    n_fetch = int(next(line for line in fetched.splitlines()
+                       if "to fill in yourself" in line).split(", ")[1].split()[0])
+    s = Session(sess)
+    s.record_claim(Claim("", "page", "3"))
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    main(["or-draft", "--session", str(sess)])
+    drafted = capsys.readouterr().out
+    n_draft = sum(1 for line in drafted.splitlines()
+                  if line.startswith("  ") and "FLAG" not in line)
+    assert n_fetch == n_draft
+
+
+def test_or_draft_passes_the_venue_and_the_memory_db_to_the_draft(
+        monkeypatch, tmp_path, real_pdf_path):
+    """or-fetch records the venue, review wires --db and --venue through, and
+    or-draft dropped both, silently discarding the accumulated voice and
+    verdict patterns the project deliberately built."""
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    db = tmp_path / "memory.db"
+    store = SQLiteMemoryStore(str(db))
+    store.store(Note("prefers a short summary", VENUE, "style"),
+                Session(sess).load_doc())
+    seen = []
+    monkeypatch.setattr("refereekit.cli._backend",
+                        lambda: FakeBackend(lambda p: seen.append(p) or "ok"))
+    assert main(["or-draft", "--session", str(sess), "--db", str(db)]) == 0
+    assert "prefers a short summary" in seen[0]
+
+
 def _fetched_session(monkeypatch, tmp_path, real_pdf_path):
     _patch(monkeypatch, _fake_client(real_pdf_path))
     sess = tmp_path / "s"
@@ -296,6 +368,26 @@ def test_or_draft_with_an_unknown_length_name_exits_2(monkeypatch, tmp_path,
     rc = main(["or-draft", "--session", str(sess), "--length", "nope=short"])
     assert rc == 2
     assert "nope" in capsys.readouterr().err
+
+
+def test_an_unknown_length_name_is_reported_before_the_backend_is_built(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """The name=value parse was hoisted out of the fill() call, but the "does
+    this field exist" check stayed inside fill(), which runs after _backend().
+    With the anthropic extra absent the referee was told their install was
+    broken when the real problem was a typo in the flag. Asserting on exit 2
+    alone would pass under either ordering, so this asserts on the message."""
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    import refereekit.cli as climod
+
+    def no_backend():
+        raise ModuleNotFoundError("No module named 'anthropic'")
+    monkeypatch.setattr(climod, "_backend", no_backend)
+    rc = main(["or-draft", "--session", str(sess), "--length", "nope=short"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "--length" in err and "nope" in err
+    assert "anthropic" not in err
 
 
 def test_or_draft_validates_length_before_building_a_backend(

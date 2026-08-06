@@ -34,9 +34,13 @@ class ReviewForm:
     fields: list          # sorted by order
 
     def prose_fields(self) -> list:
-        """Free text. refereekit drafts these."""
-        return [f for f in self.fields
-                if f.type.startswith("string") and not f.enum]
+        """Free text. refereekit drafts these.
+
+        An exact type match, not a prefix: 'string[]' is a list of values, and
+        drafting flowing prose into a field expecting a list would be wrong in
+        a way the venue's form cannot accept. other_fields surfaces it.
+        """
+        return [f for f in self.fields if f.type == "string" and not f.enum]
 
     def choice_fields(self) -> list:
         """Anything with an enum. Left empty for the referee: verification is

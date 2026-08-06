@@ -161,7 +161,8 @@ of shell history and the process table:
 
     # draft the prose fields
     export REFEREEKIT_ZERO_RETENTION=1
-    refereekit or-draft --session ./work/iclr-42 [--length summary=short]
+    refereekit or-draft --session ./work/iclr-42 [--length summary=short] \
+        [--db ./work/memory.db]
 
     # summarize what the authors said back
     refereekit or-responses --session ./work/iclr-42
@@ -195,6 +196,18 @@ A failure to read the review form or the discussion is not an exit 2. Those
 steps are best-effort: `or-fetch` prints what it could not read, leaves
 `form.json` absent or `theirs/` empty, and exits 0, because the PDF is the part
 you need first and a later `or-fetch` picks up the rest.
+
+**One session directory holds one paper.** `or-fetch --number` refuses a
+session whose `state.json` records a different number, because overwriting
+would leave `theirs/` holding two papers' notes and a stale
+`ours/openreview.md` that `or-responses` would read as your review of the new
+paper. Use a fresh `--session` per submission. Re-fetching the same number into
+the same session is fine, and is how you pick up a new rebuttal.
+
+**`--db`** gives `or-draft` your memory database, mirroring `review`. `or-fetch`
+records the venue in the session, so the notes you have stored for that venue
+reach the draft. It defaults to `<session>/memory.db`, the same default
+`review` uses, so the two commands share one store without being told to.
 
 **`--baseurl`** points `or-fetch` at a different OpenReview deployment. It
 defaults to `https://api2.openreview.net`. Use

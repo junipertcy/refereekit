@@ -41,6 +41,21 @@ def _dedupe(flags: list) -> list:
     return out
 
 
+def validate_lengths(form, lengths) -> None:
+    """A --length naming no field on this form is a typo, or a form that
+    differs from the one the referee expected. Both are worth hearing about.
+
+    Exposed so cli.py can check before constructing a backend: with the llm
+    extra absent, checking inside fill() reported a broken install when the
+    real problem was a typo in the flag. One implementation, so the CLI and
+    fill cannot disagree about what counts as a valid name.
+    """
+    unknown = sorted(set(lengths or {}) - {f.name for f in form.fields})
+    if unknown:
+        raise ValueError(
+            f"--length names no field in this form: {', '.join(unknown)}")
+
+
 def validate_pool(session) -> None:
     """Refuse to draft from a session that has been fetched but not reviewed.
 
@@ -71,10 +86,7 @@ def fill(session, form, *, backend, style_path, lengths=None,
     the others.
     """
     lengths = dict(lengths or {})
-    unknown = sorted(set(lengths) - {f.name for f in form.fields})
-    if unknown:
-        raise ValueError(
-            f"--length names no field in this form: {', '.join(unknown)}")
+    validate_lengths(form, lengths)
     validate_pool(session)
     verdict = session.get_state("verdict", {})
     values, flags = {}, []
