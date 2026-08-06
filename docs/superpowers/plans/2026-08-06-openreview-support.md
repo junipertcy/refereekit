@@ -1324,8 +1324,11 @@ Expected: all passing.
 
 - [ ] **Step 8: Confirm the read-only constraint holds**
 
-Run: `grep -rn "post_note_edit\|put_attachment\|post_edge" refereekit/`
+Run: `grep -rn "\.post_note_edit(\|\.put_attachment(\|\.post_edge(" refereekit/`
 Expected: no output. If anything matches, a write path has crept in and the task is not done.
+Grep for the call form, not the bare name: `client.py`'s module docstring states that no
+`post_note_edit` call exists, and a bare-name grep would match that sentence and read as
+a violation of the very property it documents.
 
 - [ ] **Step 9: Commit**
 
@@ -2268,8 +2271,9 @@ Expected: 225 passing: 150 existing plus 75 new (14 + 4 + 24 + 11 + 9 + 13).
 
 - [ ] **Step 10: Verify the read-only constraint one more time**
 
-Run: `grep -rn "post_note_edit\|put_attachment\|post_edge\|post_note" refereekit/`
-Expected: no output.
+Run: `grep -rn "\.post_note_edit(\|\.put_attachment(\|\.post_edge(\|\.post_note(" refereekit/`
+Expected: no output. The call form matters: `client.py`'s docstring names `post_note_edit`
+to state that no such call exists, so a bare-name grep matches the documentation itself.
 
 - [ ] **Step 11: Commit**
 
