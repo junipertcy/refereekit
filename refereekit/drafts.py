@@ -59,7 +59,8 @@ class Draft:
     text: str
     flags: list = field(default_factory=list)
 
-def build_prompt(pool: dict, style: str, section_lengths: dict, prior_notes: list[str] = None) -> str:
+def build_prompt(pool: dict, style: str, section_lengths: dict, prior_notes: list[str] = None,
+                 field_instruction: str | None = None) -> str:
     lengths = ", ".join(f"{k}={v}" for k, v in section_lengths.items()) or "default"
 
     prior_section = ""
@@ -69,12 +70,20 @@ def build_prompt(pool: dict, style: str, section_lengths: dict, prior_notes: lis
             "\n".join(f"- {n}" for n in prior_notes) + "\n\n"
         )
 
+    # One named field of a structured review form, when that is what we are
+    # writing. The instruction is the venue's own description of the field:
+    # better guidance than anything we could invent.
+    field_section = ""
+    if field_instruction:
+        field_section = f"=== THIS SECTION ===\n{field_instruction}\n\n"
+
     return (
         "Write a referee report in the voice described below.\n\n"
         f"=== VOICE GUIDE ===\n{style}\n\n"
         f"{prior_section}"
         f"=== VERDICT ===\n{pool['verdict']}\n\n"
         f"{_claim_lines(pool)}\n\n"
+        f"{field_section}"
         f"=== SECTION LENGTHS ===\n{lengths}\n\n"
         "Cite page/equation anchors only if they appear above. Quote the "
         "manuscript's words only from VERIFIED QUOTATIONS; for unverified "
@@ -102,13 +111,15 @@ def _verify_prose(prose: str, pool: dict, doc) -> Draft:
             flags.append(Flag(a.anchor, a.kind, "failed re-verification"))
     return Draft(text=prose, flags=flags)
 
-def report(session, verdict: dict, section_lengths: dict, *, backend, style_path, memory=None, venue=None) -> Draft:
+def report(session, verdict: dict, section_lengths: dict, *, backend, style_path,
+           memory=None, venue=None, field_instruction: str | None = None) -> Draft:
     pool = build_pool(session)
     prior_notes = None
     if memory is not None and venue is not None:
         notes = memory.recall(venue)
         prior_notes = [n.text for n in notes]
-    prompt = build_prompt(pool, load_style(style_path), section_lengths, prior_notes)
+    prompt = build_prompt(pool, load_style(style_path), section_lengths, prior_notes,
+                          field_instruction)
     prose = complete(prompt, backend=backend, manuscript_ok=True)
     return _verify_prose(prose, pool, session.load_doc())
 
