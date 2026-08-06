@@ -3,6 +3,7 @@ from pathlib import Path
 
 from refereekit.cli import main
 from refereekit.ingest import ingest
+from refereekit.llm import FakeBackend
 from refereekit.openreview import client as orclient
 from refereekit.session import Session
 from refereekit.types import Claim
@@ -76,6 +77,59 @@ def test_or_fetch_stores_replies_but_not_our_own(monkeypatch, tmp_path,
                  "--session", str(sess)]) == 0
     names = [p.name for p in (sess / "theirs").iterdir()]
     assert names == ["r-them-1700000000000.txt"]
+
+
+def test_or_fetch_warns_and_holds_back_when_ownership_is_unverified(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """A group lookup that fails, or a venue whose group naming differs from
+    the Reviewer_ prefix, leaves the skip set unusable. Our own Official_Review
+    would then be written to theirs/ and or-responses would feed it to the
+    model as an author response. It is held back, and the referee is told
+    which note and why, not left to discover their own text quoted back."""
+    replies = [
+        {"id": "r-them", "tcdate": 1700000000000, "signatures": ["~Author_One1"],
+         "invitations": [f"{VENUE}/Submission42/-/Rebuttal"],
+         "content": {"comment": {"value": "We revised Sec. 3."}}},
+        {"id": "r-maybe-mine", "tcdate": 1700000000000,
+         "signatures": [f"{VENUE}/Submission42/AnonReviewer1"],
+         "invitations": [f"{VENUE}/Submission42/-/Official_Review"],
+         "content": {"review": {"value": "placeholder review prose"}}},
+    ]
+    _patch(monkeypatch, _fake_client(real_pdf_path, replies=replies,
+                                     raise_on={"get_groups"}))
+    sess = tmp_path / "s"
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+    names = [p.name for p in (sess / "theirs").iterdir()]
+    assert names == ["r-them-1700000000000.txt"]
+    out = capsys.readouterr().out
+    assert "1 held back" in out
+    assert "r-maybe-mine" in out
+    assert "could not confirm" in out
+
+
+def test_or_responses_never_sees_a_held_back_review(monkeypatch, tmp_path,
+                                                    real_pdf_path):
+    """The consequence the hold-back exists to prevent: our own review read
+    back out of theirs/ and analyzed as what the authors said."""
+    replies = [
+        {"id": "r-them", "tcdate": 1700000000000, "signatures": ["~Author_One1"],
+         "invitations": [f"{VENUE}/Submission42/-/Rebuttal"],
+         "content": {"comment": {"value": "We revised Sec. 3."}}},
+        {"id": "r-maybe-mine", "tcdate": 1700000000000,
+         "signatures": [f"{VENUE}/Submission42/Reviewer_xyz9"],
+         "invitations": [f"{VENUE}/Submission42/-/Official_Review"],
+         "content": {"review": {"value": "unmistakable placeholder marker"}}},
+    ]
+    _patch(monkeypatch, _fake_client(real_pdf_path, replies=replies,
+                                     raise_on={"get_groups"}))
+    sess = tmp_path / "s"
+    main(["or-fetch", "--venue", VENUE, "--number", "42", "--session", str(sess)])
+    seen = []
+    monkeypatch.setattr("refereekit.cli._backend",
+                        lambda: FakeBackend(lambda p: seen.append(p) or "ok"))
+    assert main(["or-responses", "--session", str(sess)]) == 0
+    assert "unmistakable placeholder marker" not in seen[0]
 
 
 def test_or_fetch_before_the_review_stage_still_gets_the_pdf(

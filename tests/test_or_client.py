@@ -125,9 +125,17 @@ def test_our_group_ids_queries_by_prefix_and_signatory():
     assert kw["signatory"] == "~Test_User1"
 
 
-def test_our_group_ids_is_empty_when_the_lookup_fails():
+def test_our_group_ids_is_none_when_the_lookup_fails():
+    """None is not an empty set. Both leave ownership unverifiable, but only
+    one of them is a fault the referee can act on."""
     c = _client(raise_on={"get_groups"})
-    assert orclient.our_group_ids(c, VENUE, 42) == set()
+    assert orclient.our_group_ids(c, VENUE, 42) is None
+
+
+def test_our_group_ids_is_an_empty_set_when_no_group_matches():
+    """A successful lookup that finds nothing. A venue naming its groups
+    Reviewers or AnonReviewer1 rather than Reviewer_ lands here."""
+    assert orclient.our_group_ids(_client(groups=[]), VENUE, 42) == set()
 
 
 # ---- replies
@@ -145,9 +153,65 @@ def test_fetch_replies_flattens_the_details_replies():
 def test_store_replies_names_files_by_note_id_and_tcdate(tmp_path):
     s = Session.create(tmp_path, "p")
     r = _reply("r1", 1700000000000, ["~Author_One1"], "X/-/Rebuttal")
-    written, skipped = orclient.store_replies(s, [r], set())
+    written, skipped, held = orclient.store_replies(s, [r], set())
     assert written == ["r1-1700000000000.txt"] and skipped == []
+    assert held == []
     assert (s.theirs_dir / "r1-1700000000000.txt").exists()
+
+
+def test_an_official_review_is_held_back_when_ownership_is_unverified(tmp_path):
+    """With no skip set, an Official_Review signed by a reviewer group could be
+    ours. theirs/ means received from others, and or-responses feeds everything
+    in it to the model as an author response, so our own review landing there
+    would be analyzed as agreeing with itself."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r-unknown", 1700000000000,
+               [f"{VENUE}/Submission42/Reviewer_abc1"], "X/-/Official_Review")
+    written, skipped, held = orclient.store_replies(s, [r], set())
+    assert written == [] and skipped == []
+    assert held == ["r-unknown-1700000000000.txt"]
+    assert not (s.theirs_dir / "r-unknown-1700000000000.txt").exists()
+
+
+def test_a_profile_signed_note_is_stored_even_with_no_skip_set(tmp_path):
+    """A ~-prefixed signature is a named profile, so it is not one of our own
+    anonymous reviewer groups. An author comment must still arrive."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r-author", 1700000000000, ["~Author_One1"], "X/-/Rebuttal")
+    written, _, held = orclient.store_replies(s, [r], set())
+    assert written == ["r-author-1700000000000.txt"] and held == []
+
+
+def test_a_profile_signed_official_review_is_stored(tmp_path):
+    """A venue with non-anonymous reviewing signs reviews with the profile id.
+    That cannot be one of our anonymous groups, so it is received from others."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r-named", 1700000000000, ["~Co_Reviewer1"], "X/-/Official_Review")
+    written, _, held = orclient.store_replies(s, [r], set())
+    assert written == ["r-named-1700000000000.txt"] and held == []
+
+
+def test_a_non_review_group_signed_note_is_stored_with_no_skip_set(tmp_path):
+    """Holding back is scoped to Official_Review. An area chair's comment is
+    not something we could have written, so an empty skip set does not
+    quarantine the whole discussion."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r-ac", 1700000000000,
+               [f"{VENUE}/Submission42/Area_Chairs"], "X/-/Meta_Review")
+    written, _, held = orclient.store_replies(s, [r], set())
+    assert written == ["r-ac-1700000000000.txt"] and held == []
+
+
+def test_a_known_skip_set_stores_a_coreviewer_official_review(tmp_path):
+    """The hold-back is only for an unverified skip set. Once ownership is
+    known, a co-reviewer's report is received from others and belongs in
+    theirs/, exactly as before."""
+    s = Session.create(tmp_path, "p")
+    mine = f"{VENUE}/Submission42/Reviewer_abc1"
+    co = _reply("r-co", 1700000000000,
+                [f"{VENUE}/Submission42/Reviewer_zzz9"], "X/-/Official_Review")
+    written, _, held = orclient.store_replies(s, [co], {mine})
+    assert written == ["r-co-1700000000000.txt"] and held == []
 
 
 def test_stored_reply_header_says_what_it_is(tmp_path):
@@ -166,7 +230,7 @@ def test_refetching_an_unchanged_reply_is_skipped_not_an_error(tmp_path):
     s = Session.create(tmp_path, "p")
     r = _reply("r1", 1700000000000, ["~Author_One1"], "X/-/Rebuttal")
     orclient.store_replies(s, [r], set())
-    written, skipped = orclient.store_replies(s, [r], set())
+    written, skipped, _ = orclient.store_replies(s, [r], set())
     assert written == [] and skipped == ["r1-1700000000000.txt"]
 
 
@@ -177,7 +241,7 @@ def test_a_revised_reply_becomes_a_second_file_and_both_remain(tmp_path):
     first = _reply("r1", 1700000000000, ["~Author_One1"], "X/-/Rebuttal", "v1")
     second = _reply("r1", 1700009999000, ["~Author_One1"], "X/-/Rebuttal", "v2")
     orclient.store_replies(s, [first], set())
-    written, _ = orclient.store_replies(s, [second], set())
+    written, _, _ = orclient.store_replies(s, [second], set())
     assert written == ["r1-1700009999000.txt"]
     assert (s.theirs_dir / "r1-1700000000000.txt").read_text().endswith("v1\n")
     assert (s.theirs_dir / "r1-1700009999000.txt").read_text().endswith("v2\n")
@@ -194,7 +258,7 @@ def test_our_own_review_never_lands_in_theirs(tmp_path):
     coreviewer = _reply("r-co", 1700000000000,
                         [f"{VENUE}/Submission42/Reviewer_zzz9"],
                         "X/-/Official_Review")
-    written, _ = orclient.store_replies(s, [ours, theirs, coreviewer], {mine})
+    written, _, _ = orclient.store_replies(s, [ours, theirs, coreviewer], {mine})
     assert sorted(written) == ["r-co-1700000000000.txt",
                               "r-them-1700000000000.txt"]
     assert not (s.theirs_dir / "r-mine-1700000000000.txt").exists()

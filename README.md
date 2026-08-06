@@ -206,6 +206,17 @@ new timestamp and so becomes a new file: both versions are kept and you can see
 what changed. Replies you signed yourself are not stored in `theirs/`, because
 that directory is for documents received from others.
 
+**A reply whose ownership cannot be confirmed is held back, not stored.**
+Identifying your own replies means looking up your anonymous reviewer groups
+for the submission. That lookup can fail, and a venue may name its reviewer
+groups in a form refereekit does not recognize. When it comes back with
+nothing, `or-fetch` does not write any `Official_Review` signed by a group
+rather than a named profile into `theirs/`: it names those notes on stdout with
+the forum id and leaves them for you to check on OpenReview. Everything else in
+the discussion still arrives. `or-responses` reads all of `theirs/` as what
+came back from others, so a review of yours stored there would be analyzed as
+agreeing with itself.
+
 **Venue LLM policies differ, and refereekit does not check or enforce them.**
 Compliance is yours. Two current examples, worth knowing before you run
 `or-draft`:

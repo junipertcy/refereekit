@@ -240,8 +240,20 @@ def main(argv=None) -> int:
                 print("no replies yet; theirs/ left empty")
             else:
                 mine = orclient.our_group_ids(c, args.venue, args.number)
-                written, skipped = orclient.store_replies(s, replies, mine)
-                print(f"theirs/: {len(written)} new, {len(skipped)} unchanged")
+                written, skipped, held = orclient.store_replies(s, replies, mine)
+                print(f"theirs/: {len(written)} new, {len(skipped)} unchanged"
+                      + (f", {len(held)} held back" if held else ""))
+                if held:
+                    # theirs/ means received from others, and or-responses feeds
+                    # all of it to the model as what came back. Confusing our
+                    # own review for a co-referee's is the failure this feature
+                    # most has to avoid, so an unresolvable signature is named
+                    # rather than guessed at.
+                    print("could not confirm these are not your own review, so "
+                          "they were not stored in theirs/:")
+                    for name in held:
+                        print(f"  {name}")
+                    print(f"check them by hand on forum {forum}")
             return 0
         except (orclient.ORError, FileNotFoundError, ValueError,
                 ProvenanceError, pymupdf.FileNotFoundError,

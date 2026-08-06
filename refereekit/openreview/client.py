@@ -133,19 +133,22 @@ def fetch_form(client, venue: str, number: int) -> ReviewForm | None:
     return parse_form({"id": inv_id, "edit": edit or {}})
 
 
-def our_group_ids(client, venue: str, number: int) -> set:
+def our_group_ids(client, venue: str, number: int) -> set | None:
     """Our own anonymous reviewer group ids for this submission.
 
-    A reply signed by one of these is ours, not theirs. Returns an empty set on
-    failure: the consequence is that a reply of ours could be stored under
-    theirs/, which the caller reports, rather than the whole fetch failing.
+    A reply signed by one of these is ours, not theirs. None means the lookup
+    itself failed and ownership could not be established; an empty set means it
+    succeeded and matched nothing, which a venue naming its groups Reviewers,
+    AnonReviewer1 or Anonymous_Reviewer also produces. Both leave ownership
+    unverifiable, so store_replies treats them alike, but only the first is a
+    fault, and collapsing them into one value hid that from the caller.
     """
     try:
         groups = client.get_groups(
             prefix=f"{venue}/Submission{number}/Reviewer_",
             signatory=profile_id(client))
     except Exception:
-        return set()
+        return None
     return {g.id for g in groups}
 
 
@@ -187,8 +190,23 @@ def _render_reply(r: dict) -> str:
             f"# invitation: {inv}\n\n" + "\n\n".join(body) + "\n")
 
 
-def store_replies(session, replies: list, skip_signatures: set) -> tuple:
-    """Write received notes to theirs/. Returns (written names, skipped names).
+def _ownership_unverified(r: dict) -> bool:
+    """Could this reply be our own review, with no skip set to rule it out?
+
+    Only an Official_Review is a candidate: an author comment or a meta-review
+    is not something we could have written, so an unusable skip set must not
+    quarantine the whole discussion. A ~-prefixed signature is a named profile
+    rather than one of our anonymous reviewer groups, so a venue with
+    non-anonymous reviewing still receives its co-reviewers' reports.
+    """
+    if not any("Official_Review" in inv for inv in (r.get("invitations") or [])):
+        return False
+    sigs = r.get("signatures") or []
+    return not sigs or not all(str(s).startswith("~") for s in sigs)
+
+
+def store_replies(session, replies: list, skip_signatures) -> tuple:
+    """Write received notes to theirs/. Returns (written, skipped, held) names.
 
     Named <note-id>-<tcdate>.txt. A rebuttal revised during the discussion
     period has a new tcdate and so becomes a new file: both versions are kept
@@ -199,15 +217,27 @@ def store_replies(session, replies: list, skip_signatures: set) -> tuple:
     A reply signed by one of our own anonymous reviewer groups is ours, not
     theirs. Storing it here would recreate the confusion between our draft and
     someone else's report that ours/ and theirs/ exist to prevent.
+
+    When skip_signatures is empty or None, ownership could not be established,
+    and a single hardcoded group prefix was never a sufficient test anyway. An
+    Official_Review is then held back rather than written: theirs/ is read
+    wholesale by or-responses and fed to the model as what came back from
+    others, so a wrong guess there analyzes our own review against itself. The
+    caller names the held-back notes so the referee can check them by hand.
     """
-    written, skipped = [], []
+    ownership_known = bool(skip_signatures)
+    skip = set(skip_signatures or ())
+    written, skipped, held = [], [], []
     for r in replies:
-        if any(s in skip_signatures for s in (r.get("signatures") or [])):
+        if any(s in skip for s in (r.get("signatures") or [])):
             continue
         name = f"{_safe(r.get('id', 'unknown'))}-{r.get('tcdate', 0)}.txt"
+        if not ownership_known and _ownership_unverified(r):
+            held.append(name)
+            continue
         if (session.theirs_dir / name).exists():
             skipped.append(name)
             continue
         session.put_theirs(name, _render_reply(r))
         written.append(name)
-    return written, skipped
+    return written, skipped, held
