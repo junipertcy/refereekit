@@ -107,6 +107,10 @@ or-fetch --venue V                      or-fetch --venue V --number 42
                                                 |
                                           theirs/<note-id>-<tcdate>.txt
 
+review <session>/paper.pdf --session S
+        |
+   claims + verdict into state.json
+
 or-draft --session S                    or-responses --session S
         |                                        |
    form.json + verified claim pool        theirs/ + ours/report.txt
@@ -147,9 +151,12 @@ class ReviewForm:
 The `prose_fields` / `choice_fields` split is where the "drafted prose, blank
 ratings" decision lives. `choice_fields` returns every field carrying a
 non-empty enum, whatever its type. `prose_fields` returns every field whose
-`type` starts with `string` and whose enum is empty. A field that is neither,
-an enum-less integer or a `file`, appears in neither list and is reported as
-"to fill in yourself" alongside the choice fields.
+`type` is exactly `string` and whose enum is empty. A field that is neither,
+an enum-less integer, a `file`, or an enum-less `string[]`, appears in neither
+list and is reported as "to fill in yourself" alongside the choice fields. The
+type match is exact rather than a prefix because `string[]` is a list of
+values, and drafting flowing prose into it would produce something the venue's
+form cannot accept.
 
 A field is classified by the presence of an enum, not by its name, so a venue
 that calls its rating `overall_assessment` needs no change here.
@@ -243,6 +250,15 @@ With `--number`, this:
 5. writes each reply into `theirs/`, excluding replies we signed ourselves
 6. records `venue`, `number`, `forum` id, and `invitation_id` in session state
 
+One session directory holds one paper. `Session.create` is `exist_ok`, so
+fetching a second number into the same session would overwrite `paper.pdf`,
+`doc.json` and `form.json`, leave `theirs/` holding both papers' notes, and
+leave a stale `ours/openreview.md` that `or-responses` would read as our review
+of the new paper. `put_theirs` cannot detect it, because the filenames are
+legitimately distinct. A recorded `number` that differs from `--number` is
+refused with exit 2 before anything is written. Re-fetching the same number is
+unaffected, since that is how a new rebuttal is picked up.
+
 On step 5: a forum's replies include other reviewers' official reviews, author
 comments, and our own review once posted. All of them are documents received
 from others and belong in `theirs/`, with one exception: a reply whose
@@ -264,12 +280,28 @@ and `doc.json` are the part the referee needs first.
 ### `or-draft`
 
 ```
-refereekit or-draft --session ./work/iclr-42 [--style PATH] [--length summary=short]
+refereekit or-draft --session ./work/iclr-42 [--style PATH] [--length summary=short] [--db PATH]
 ```
+
+`--db` mirrors `review`, defaulting to `<session>/memory.db`. The venue comes
+from session state rather than a flag, since `or-fetch` already recorded it, so
+the stored voice and verdict patterns for the venue reach the draft on the same
+path they take under `review`.
 
 Reads `form.json` and `doc.json`, drafts every prose field, writes
 `ours/openreview.md` (for reading and pasting) and `ours/openreview.json` (the
-field-name-to-value mapping, for a future poster or a diff). Prints a summary:
+field-name-to-value mapping, for a future poster or a diff).
+
+The verified claim pool comes from a `review` pass over the fetched PDF in the
+same session directory: `refereekit review <session>/paper.pdf --session
+<session>`. `or-fetch` records the venue, the number and the forum, and the
+review loop is what records claims and the verdict, so the OpenReview path is
+three commands rather than two. `or-draft` on a session that has been fetched
+but not reviewed exits 2 and names that command. It does not draft from an
+empty pool: every field would be invented while the command reported success,
+which is a worse failure than refusing.
+
+Prints a summary:
 
 ```
 openreview: 4 prose field(s) drafted, 2 flag(s)
@@ -454,9 +486,15 @@ Follows the established pattern: catch specific exceptions, print
 | No assignments | `no assignments for <profile> at <venue>` (exit 0, not an error) |
 | Paper not assigned to you | `submission <N> is not assigned to you at <venue>` |
 | Submission has no PDF | `submission <N> has no pdf attachment` |
-| Review stage not open | warning, not an error: `no review form yet at <invitation>; skipping form.json` |
+| Review stage not open, or the form lookup failed | warning, not an error: `no review form at <invitation> (<reason>); skipping form.json`. The reason distinguishes the two, with credentials redacted out of it |
 | No replies yet | warning: `no replies yet; theirs/ left empty` |
+| Discussion unreadable | warning, not an error: `could not read the discussion for <forum> (<reason>); theirs/ left empty`. Best-effort like the form, because raising here exits 2 with most of the session written |
+| One assignment unreadable | warning: the rest of the list is printed, then `could not read N assigned submission(s): <ids>` |
+| Ownership of a reply unconfirmed | warning: the note is not written to `theirs/` and is named for the referee to check |
 | `or-draft` with no `form.json` | `no form.json; run or-fetch --number first` |
+| `or-draft` with no claim pool | `no verified claims in this session; run refereekit review <session>/paper.pdf --session <session> first` |
+| `or-fetch --number` against another paper's session | `session <dir> holds submission <M>, not <N>; use a fresh --session directory for a different paper` |
+| `--length` naming no field on the form | `--length names no field in this form: <names>`, checked before the backend is built so a missing optional extra cannot mask it |
 | `or-responses` with empty `theirs/` | `no received notes in theirs/; nothing to analyze` |
 
 `openreview.OpenReviewException` is caught at the `client.py` boundary and

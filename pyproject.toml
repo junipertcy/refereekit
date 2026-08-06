@@ -10,6 +10,7 @@ dependencies = ["PyMuPDF>=1.24"]
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 llm = ["anthropic>=0.40"]
+openreview = ["openreview-py>=1.40"]
 
 [project.scripts]
 refereekit = "refereekit.cli:main"

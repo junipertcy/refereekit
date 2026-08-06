@@ -1,0 +1,105 @@
+{
+  "id": "ICLR.cc/2027/Conference/Submission42/-/Official_Review",
+  "edit": {
+    "note": {
+      "content": {
+        "venueid": { "value": "ICLR.cc/2027/Conference" },
+        "summary": {
+          "value": { "param": { "type": "string", "maxLength": 5000, "markdown": true } },
+          "order": 1,
+          "description": "Summarize the paper in your own words."
+        },
+        "strengths": {
+          "value": { "param": { "type": "string", "maxLength": 5000 } },
+          "order": 2,
+          "description": "List the strengths of the submission."
+        },
+        "weaknesses": {
+          "value": { "param": { "type": "string", "maxLength": 5000 } },
+          "order": 3,
+          "description": "List the weaknesses of the submission."
+        },
+        "soundness": {
+          "value": { "param": {
+            "type": "integer",
+            "enum": [
+              { "value": 4, "description": "4: excellent" },
+              { "value": 1, "description": "1: poor" }
+            ],
+            "input": "radio"
+          } },
+          "order": 4,
+          "description": "Assess the soundness of the technical claims."
+        },
+        "presentation": {
+          "value": { "param": {
+            "type": "integer",
+            "enum": [
+              { "value": 4, "description": "4: excellent" },
+              { "value": 1, "description": "1: poor" }
+            ],
+            "input": "radio",
+            "someFutureKey": "ignore me"
+          } },
+          "order": 5
+        },
+        "contribution": {
+          "value": { "param": {
+            "type": "integer",
+            "enum": [
+              { "value": 4, "description": "4: excellent" },
+              { "value": 1, "description": "1: poor" }
+            ],
+            "input": "radio"
+          } },
+          "order": 6
+        },
+        "rating": {
+          "value": { "param": {
+            "type": "integer",
+            "enum": [
+              { "value": 8, "description": "8: accept, good paper" },
+              { "value": 3, "description": "3: reject, not good enough" }
+            ],
+            "input": "select"
+          } },
+          "order": 7,
+          "description": "Overall assessment."
+        },
+        "confidence": {
+          "value": { "param": {
+            "type": "integer",
+            "enum": [
+              { "value": 5, "description": "5: absolutely certain" },
+              { "value": 1, "description": "1: educated guess" }
+            ],
+            "input": "radio"
+          } },
+          "order": 8
+        },
+        "flag_for_ethics_review": {
+          "value": { "param": {
+            "type": "string[]",
+            "enum": ["No ethics review needed.", "Yes, Privacy and security"],
+            "input": "checkbox"
+          } },
+          "order": 9,
+          "description": "Does this submission need an ethics review?"
+        },
+        "confidential_comment": {
+          "value": { "param": { "type": "string", "maxLength": 5000, "optional": true } },
+          "order": 10,
+          "description": "Comments visible to the area chairs only."
+        },
+        "supplementary": {
+          "value": { "param": { "type": "file", "extensions": ["pdf"], "optional": true } },
+          "order": 11,
+          "description": "Optional attachment."
+        },
+        "code_of_conduct": {
+          "value": { "param": { "type": "string", "enum": ["I agree"], "input": "checkbox" } }
+        }
+      }
+    }
+  }
+}
