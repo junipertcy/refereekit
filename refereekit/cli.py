@@ -31,6 +31,24 @@ def _write_draft(session, name, draft):
     for f in draft.flags:
         print(f"  FLAG {f.kind} ({f.anchor}): {f.reason}")
 
+def _blank_span(f) -> str:
+    """The short column describing a field the referee fills in.
+
+    A numeric enum has a low-high span, and the invitation does not promise an
+    order, so it is derived from min and max rather than the first and last
+    entries. A textual enum has no span at all: printing '(I agree-I agree)'
+    would read as a range that does not exist, so its options are listed and
+    truncated to keep the column aligned.
+    """
+    if not f.enum:
+        return f"({f.type})"
+    values = [v for v, _ in f.enum]
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool)
+           for v in values):
+        return f"({min(values)}-{max(values)})"
+    joined = "|".join(str(v) for v in values)
+    return f"({joined[:20]}...)" if len(joined) > 20 else f"({joined})"
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     ap = argparse.ArgumentParser(prog="refereekit")
@@ -228,7 +246,11 @@ def main(argv=None) -> int:
         except (orclient.ORError, FileNotFoundError, ValueError,
                 ProvenanceError, pymupdf.FileNotFoundError,
                 pymupdf.FileDataError) as e:
-            # FileDataError: the download returned bytes that are not a PDF.
+            # FileDataError: the bytes start with %PDF but the pdf is malformed,
+            # a truncated download being the usual cause. Bytes that are not a
+            # pdf at all are rejected by the %PDF check above, which pymupdf
+            # would not catch because it sniffs the content type. EmptyFileError
+            # subclasses this, so a zero-byte download lands here too.
             print(f"error: {e}", file=sys.stderr)
             return 2
 
@@ -246,9 +268,18 @@ def main(argv=None) -> int:
             form = orform.from_json(form_path.read_text())
             style_path = (args.style or os.environ.get("REFEREEKIT_STYLE")
                           or str(_DEFAULT_STYLE))
-            filled = orfill.fill(s, form, backend=_backend(),
-                                 style_path=style_path,
-                                 lengths=dict(x.split("=", 1) for x in args.length))
+            # Parsed on its own line, before _backend(): keyword arguments
+            # evaluate left to right, so building the backend inside the call
+            # would run it before this input error could be reported.
+            try:
+                lengths = dict(x.split("=", 1) for x in args.length)
+            except ValueError:
+                print("error: --length takes name=value, "
+                      "e.g. --length summary=short", file=sys.stderr)
+                return 2
+            backend = _backend()
+            filled = orfill.fill(s, form, backend=backend,
+                                 style_path=style_path, lengths=lengths)
             s.our_draft("openreview.md").write_text(orfill.to_markdown(form, filled))
             s.our_draft("openreview.json").write_text(orfill.to_json(filled))
             print(f"openreview: {len(filled.values)} prose field(s) drafted, "
@@ -257,10 +288,10 @@ def main(argv=None) -> int:
                 print(f"  FLAG {f.kind} ({f.anchor}): {f.reason}")
             print("to fill in yourself:")
             for f in filled.blanks:
-                span = (f"({f.enum[-1][0]}-{f.enum[0][0]})" if f.enum else f"({f.type})")
-                print(f"  {f.name:<24} {span:<10} {f.description[:48]}")
+                print(f"  {f.name:<24} {_blank_span(f):<10} {f.description[:48]}")
             return 0
-        except (FileNotFoundError, ValueError, RetentionError) as e:
+        except (FileNotFoundError, ValueError, RetentionError,
+                ImportError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
 
@@ -269,8 +300,17 @@ def main(argv=None) -> int:
         from .openreview import responses as orresponses
         try:
             s = Session(Path(args.session))
-            received = [p.read_text() for p in sorted(s.theirs_dir.iterdir())
-                        if p.is_file()]
+            # A typo in --session is the usual cause, and it needs its own
+            # message. Reported before reading theirs/, and reached as a plain
+            # path rather than through the theirs_dir property, because that
+            # property mkdirs: diagnosing a missing session must not create it.
+            if not s.dir.exists():
+                print(f"error: no session at {s.dir}; run or-fetch --number "
+                      f"first", file=sys.stderr)
+                return 2
+            theirs = s.dir / "theirs"
+            received = ([p.read_text() for p in sorted(theirs.iterdir())
+                         if p.is_file()] if theirs.exists() else [])
             # Checked before constructing a backend: an empty theirs/ is an
             # input error, and it should not first fail on a missing API key.
             if not received:
@@ -288,7 +328,8 @@ def main(argv=None) -> int:
             out.write_text(text)
             print(f"wrote {out} ({len(received)} received note(s))")
             return 0
-        except (FileNotFoundError, ValueError, RetentionError) as e:
+        except (FileNotFoundError, ValueError, RetentionError,
+                ImportError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
 

@@ -164,6 +164,59 @@ def test_or_draft_with_an_unknown_length_name_exits_2(monkeypatch, tmp_path,
     assert "nope" in capsys.readouterr().err
 
 
+def test_or_draft_validates_length_before_building_a_backend(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """A malformed --length is an input error, so it must be reported before a
+    backend is constructed. Backend construction fails when the llm extra is
+    absent, which would otherwise mask the exit 2 with a traceback."""
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    import refereekit.cli as climod
+
+    def no_backend():
+        raise ModuleNotFoundError("No module named 'anthropic'")
+    monkeypatch.setattr(climod, "_backend", no_backend)
+    rc = main(["or-draft", "--session", str(sess), "--length", "summary"])
+    assert rc == 2
+    assert "--length takes name=value" in capsys.readouterr().err
+
+
+def test_or_draft_reports_a_missing_llm_extra_as_exit_2(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    import refereekit.cli as climod
+
+    def no_backend():
+        raise ModuleNotFoundError("No module named 'anthropic'")
+    monkeypatch.setattr(climod, "_backend", no_backend)
+    rc = main(["or-draft", "--session", str(sess)])
+    assert rc == 2
+    assert "anthropic" in capsys.readouterr().err
+
+
+def test_or_draft_renders_a_non_numeric_enum_without_a_fake_range(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """A numeric enum has a low-high span. A textual one does not, and printing
+    '(I agree-I agree)' as though it were a range misreads the form."""
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    assert main(["or-draft", "--session", str(sess)]) == 0
+    out = capsys.readouterr().out
+    assert "(1-4)" in out                       # soundness, numeric
+    assert "(I agree-I agree)" not in out
+    assert "I agree" in out                     # still shown, as an option
+    for line in out.splitlines():
+        if line.startswith("  code_of_conduct"):
+            assert len(line) < 100
+
+
+def test_or_responses_on_a_nonexistent_session_creates_nothing(tmp_path, capsys):
+    sess = tmp_path / "nope"
+    rc = main(["or-responses", "--session", str(sess)])
+    assert rc == 2
+    assert "no session at" in capsys.readouterr().err
+    assert not sess.exists()
+
+
 def test_or_responses_writes_the_analysis(monkeypatch, tmp_path,
                                          real_pdf_path, capsys):
     mine = f"{VENUE}/Submission42/Reviewer_me1"

@@ -165,6 +165,17 @@ of shell history and the process table:
 **Output:** `ours/openreview.md` for reading and pasting, `ours/openreview.json`
 as a field-name-to-value mapping, and `ours/response-analysis.txt`.
 
+**Exit codes:** all three return 0 on success and 2 on an input error, with the
+reason on stderr. An input error means a bad venue id, a submission not assigned
+to you, a download that is not a pdf, a missing session, a session with no
+`form.json`, an empty `theirs/`, a malformed `--length`, or a missing optional
+dependency. Nothing is written when a command exits 2.
+
+**`--baseurl`** points `or-fetch` at a different OpenReview deployment. It
+defaults to `https://api2.openreview.net`. Use
+`--baseurl https://devapi2.openreview.net` to try the calls against the API
+sandbox without touching production.
+
 **Ratings are never filled in.** Verification is quotation-scoped substring
 matching. It can confirm that a quoted phrase is on a page; it cannot tell a
 soundness of 3 from a 4. Every field the venue defines with a fixed set of
