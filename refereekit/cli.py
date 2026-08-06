@@ -196,13 +196,19 @@ def main(argv=None) -> int:
         try:
             c = orclient.make_client(args.baseurl or orclient.BASEURL)
             if args.number is None:
-                found = orclient.list_assignments(c, args.venue)
+                found, unreadable = orclient.list_assignments(c, args.venue)
                 if not found:
                     print(f"no assignments for you at {args.venue}")
-                    return 0
                 for a in found:
                     print(f"  {a.number:>4}  {a.title}")
-                print("Fetch one with: --number <N>")
+                if unreadable:
+                    # Usually a withdrawn or desk-rejected paper still carrying
+                    # an assignment edge. Named so the referee knows the list is
+                    # short rather than believing it is complete.
+                    print(f"could not read {len(unreadable)} assigned "
+                          f"submission(s): {', '.join(unreadable)}")
+                if found:
+                    print("Fetch one with: --number <N>")
                 return 0
             sdir = Path(args.session)
             s = Session.create(sdir.parent, sdir.name)
@@ -214,7 +220,7 @@ def main(argv=None) -> int:
             if not pdf_bytes.startswith(b"%PDF"):
                 raise ValueError(
                     f"the download for submission {args.number} is not a pdf "
-                    f"({len(pdf_bytes)} bytes); nothing was written")
+                    f"({len(pdf_bytes)} bytes); no paper.pdf was written")
             pdf_path = s.dir / "paper.pdf"
             pdf_path.write_bytes(pdf_bytes)
             doc = ingest(pdf_path)
@@ -226,17 +232,24 @@ def main(argv=None) -> int:
             # Best-effort from here. Before the review stage opens there is no
             # invitation, and before the rebuttal period there are no replies.
             # Neither is an error: the pdf is the part the referee needs first.
-            form = orclient.fetch_form(c, args.venue, args.number)
+            form, why = orclient.fetch_form(c, args.venue, args.number)
             if form is None:
-                print(f"no review form yet at {args.venue}/Submission"
-                      f"{args.number}/-/Official_Review; skipping form.json")
+                # The reason distinguishes an unopened review stage from a 503
+                # or an expired token, which used to print the same line and
+                # send the referee to re-run the or-fetch they had just run.
+                print(f"no review form at {args.venue}/Submission"
+                      f"{args.number}/-/Official_Review ({why}); "
+                      f"skipping form.json")
             else:
                 (s.dir / "form.json").write_text(orform.to_json(form))
                 s.set_state("invitation_id", form.invitation_id)
                 print(f"review form: {len(form.prose_fields())} prose field(s), "
                       f"{len(form.choice_fields())} to fill in yourself")
-            replies = orclient.fetch_replies(c, forum)
-            if not replies:
+            replies, why = orclient.fetch_replies(c, forum)
+            if why:
+                print(f"could not read the discussion for {forum} ({why}); "
+                      f"theirs/ left empty")
+            elif not replies:
                 print("no replies yet; theirs/ left empty")
             else:
                 mine = orclient.our_group_ids(c, args.venue, args.number)

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -26,9 +27,10 @@ def _client(**kw):
 
 def test_list_assignments_returns_number_and_title():
     c = _client(edges=[FakeEdge(head="note-42")])
-    got = orclient.list_assignments(c, VENUE)
+    got, unreadable = orclient.list_assignments(c, VENUE)
     assert [(a.number, a.title, a.forum) for a in got] == [
         (42, "A Paper About Things", "note-42")]
+    assert unreadable == []
 
 
 def test_list_assignments_queries_the_assignment_invitation_with_our_profile():
@@ -44,17 +46,30 @@ def test_list_assignments_sorts_by_paper_number():
     notes = {7: _sub(7, "note-7", "Seven"), 42: _sub(42, "note-42", "Fortytwo")}
     c = _client(notes=notes,
                 edges=[FakeEdge(head="note-42"), FakeEdge(head="note-7")])
-    assert [a.number for a in orclient.list_assignments(c, VENUE)] == [7, 42]
+    assert [a.number for a in orclient.list_assignments(c, VENUE)[0]] == [7, 42]
 
 
 def test_no_assignments_is_an_empty_list_not_an_error():
-    assert orclient.list_assignments(_client(edges=[]), VENUE) == []
+    assert orclient.list_assignments(_client(edges=[]), VENUE) == ([], [])
 
 
 def test_edge_failure_becomes_an_ORError_naming_the_venue():
     c = _client(raise_on={"get_all_edges"})
     with pytest.raises(orclient.ORError, match="check the venue id"):
         orclient.list_assignments(c, VENUE)
+
+
+def test_one_unreadable_assignment_does_not_blank_the_list():
+    """A withdrawn or desk-rejected paper still assigned to you made the whole
+    listing exit 2, and listing is the entry point to the feature: the referee
+    could not see any of their other assignments."""
+    notes = {7: _sub(7, "note-7", "Seven"), 42: _sub(42, "note-42", "Fortytwo")}
+    c = _client(notes=notes, edges=[FakeEdge(head="note-gone"),
+                                    FakeEdge(head="note-7"),
+                                    FakeEdge(head="note-42")])
+    got, unreadable = orclient.list_assignments(c, VENUE)
+    assert [a.number for a in got] == [7, 42]
+    assert unreadable == ["note-gone"]
 
 
 # ---- submission
@@ -102,7 +117,8 @@ def test_submission_without_a_pdf_says_so():
 def test_fetch_form_parses_the_invitation():
     inv = json.loads(Path("tests/fixtures/openreview_default_form.json").read_text())
     c = _client(invitation=inv)
-    form = orclient.fetch_form(c, VENUE, 42)
+    form, why = orclient.fetch_form(c, VENUE, 42)
+    assert why == ""
     assert [f.name for f in form.prose_fields()] == ["title", "review"]
     assert c.kwargs_for("get_invitation")[0]["id"] == \
         f"{VENUE}/Submission42/-/Official_Review"
@@ -111,7 +127,31 @@ def test_fetch_form_parses_the_invitation():
 def test_fetch_form_is_none_before_the_review_stage_opens():
     """No invitation yet is normal, not an error: the referee still wants the
     pdf, which is the part they need first."""
-    assert orclient.fetch_form(_client(invitation=None), VENUE, 42) is None
+    form, why = orclient.fetch_form(_client(invitation=None), VENUE, 42)
+    assert form is None
+
+
+def test_fetch_form_reports_why_it_came_back_empty():
+    """A 503 and an unopened review stage produced the same message, so a
+    transient failure read as "the review stage has not opened" and the referee
+    was then told by or-draft to run the or-fetch they had just run."""
+    form, why = orclient.fetch_form(_client(raise_on={"get_invitation"}), VENUE, 42)
+    assert form is None
+    assert "fake failure in get_invitation" in why
+
+
+def test_fetch_form_reason_cannot_carry_a_credential(monkeypatch):
+    """The reason comes from an exception, and an auth failure is one of the
+    cases it covers. Credentials live in the environment and must not reach a
+    message that gets printed."""
+    monkeypatch.setenv("OPENREVIEW_PASSWORD", "hunter2-do-not-print")
+
+    class Leaky:
+        def get_invitation(self, id):
+            raise RuntimeError(f"401 for {os.environ['OPENREVIEW_PASSWORD']}")
+    form, why = orclient.fetch_form(Leaky(), VENUE, 42)
+    assert form is None
+    assert "hunter2" not in why
 
 
 # ---- our own anonymous groups
@@ -147,7 +187,37 @@ def _reply(nid, tcdate, sigs, invitation, body="Thanks for the review."):
 
 def test_fetch_replies_flattens_the_details_replies():
     r = _reply("r1", 1700000000000, ["~Author_One1"], "X/-/Rebuttal")
-    assert orclient.fetch_replies(_client(replies=[r]), "note-42") == [r]
+    got, why = orclient.fetch_replies(_client(replies=[r]), "note-42")
+    assert got == [r] and why == ""
+
+
+def test_fetch_replies_is_best_effort_like_its_neighbors():
+    """fetch_form and our_group_ids degrade rather than raise. A 500 from the
+    discussion endpoint used to exit 2 after paper.pdf, doc.json, form.json and
+    state.json were already on disk."""
+    got, why = orclient.fetch_replies(_client(raise_on={"get_all_notes/forum"}),
+                                      "note-42")
+    assert got == []
+    assert "fake failure in get_all_notes/forum" in why
+
+
+def test_a_non_numeric_tcdate_is_a_clear_message_not_an_int_error(tmp_path):
+    """id went through _safe and tcdate did not, so a non-integer tcdate raised
+    a bare ValueError from int() that meant nothing to a referee."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r1", "not-a-timestamp", ["~Author_One1"], "X/-/Rebuttal")
+    with pytest.raises(ValueError, match="tcdate"):
+        orclient.store_replies(s, [r], {"someone"})
+
+
+def test_a_hostile_tcdate_cannot_escape_the_filename(tmp_path):
+    """Both halves of the name are sanitized now, so a path separator in either
+    one cannot steer the write out of theirs/."""
+    s = Session.create(tmp_path, "p")
+    r = _reply("r1", "../../etc/passwd", ["~Author_One1"], "X/-/Rebuttal")
+    with pytest.raises(ValueError, match="tcdate"):
+        orclient.store_replies(s, [r], {"someone"})
+    assert list(s.theirs_dir.iterdir()) == []
 
 
 def test_store_replies_names_files_by_note_id_and_tcdate(tmp_path):

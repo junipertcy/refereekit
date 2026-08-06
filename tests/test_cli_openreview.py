@@ -141,7 +141,52 @@ def test_or_fetch_before_the_review_stage_still_gets_the_pdf(
     assert rc == 0
     assert (sess / "doc.json").exists()
     assert not (sess / "form.json").exists()
-    assert "no review form yet" in capsys.readouterr().out
+    assert "no review form" in capsys.readouterr().out
+
+
+def test_or_fetch_keeps_the_pdf_when_the_discussion_cannot_be_read(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """fetch_form and our_group_ids degrade rather than raise. A 500 from the
+    discussion endpoint used to exit 2 with paper.pdf, doc.json, form.json and
+    state.json already written, which is the half-built session the %PDF check
+    exists to prevent."""
+    _patch(monkeypatch, _fake_client(real_pdf_path,
+                                     raise_on={"get_all_notes/forum"}))
+    sess = tmp_path / "s"
+    rc = main(["or-fetch", "--venue", VENUE, "--number", "42",
+               "--session", str(sess)])
+    assert rc == 0
+    assert (sess / "doc.json").exists() and (sess / "form.json").exists()
+    out = capsys.readouterr().out
+    assert "could not read the discussion" in out
+    assert "theirs/ left empty" in out
+
+
+def test_or_fetch_says_why_there_is_no_form_when_the_lookup_failed(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """A transient failure and an unopened review stage produced the same
+    message, so the referee ran or-draft and was told to run the or-fetch they
+    had just run."""
+    _patch(monkeypatch, _fake_client(real_pdf_path,
+                                     raise_on={"get_invitation"}))
+    sess = tmp_path / "s"
+    assert main(["or-fetch", "--venue", VENUE, "--number", "42",
+                 "--session", str(sess)]) == 0
+    out = capsys.readouterr().out
+    assert "no review form" in out
+    assert "fake failure in get_invitation" in out
+
+
+def test_or_fetch_lists_the_rest_when_one_assignment_is_unreadable(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    c = _fake_client(real_pdf_path)
+    c._edges = [FakeEdge(head="note-gone"), FakeEdge(head="note-42")]
+    _patch(monkeypatch, c)
+    rc = main(["or-fetch", "--venue", VENUE, "--session", str(tmp_path / "s")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "A Paper" in out
+    assert "note-gone" in out
 
 
 def test_or_fetch_reports_an_or_error_as_exit_2(monkeypatch, tmp_path, capsys):

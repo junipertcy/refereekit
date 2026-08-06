@@ -469,8 +469,11 @@ Follows the established pattern: catch specific exceptions, print
 | No assignments | `no assignments for <profile> at <venue>` (exit 0, not an error) |
 | Paper not assigned to you | `submission <N> is not assigned to you at <venue>` |
 | Submission has no PDF | `submission <N> has no pdf attachment` |
-| Review stage not open | warning, not an error: `no review form yet at <invitation>; skipping form.json` |
+| Review stage not open, or the form lookup failed | warning, not an error: `no review form at <invitation> (<reason>); skipping form.json`. The reason distinguishes the two, with credentials redacted out of it |
 | No replies yet | warning: `no replies yet; theirs/ left empty` |
+| Discussion unreadable | warning, not an error: `could not read the discussion for <forum> (<reason>); theirs/ left empty`. Best-effort like the form, because raising here exits 2 with most of the session written |
+| One assignment unreadable | warning: the rest of the list is printed, then `could not read N assigned submission(s): <ids>` |
+| Ownership of a reply unconfirmed | warning: the note is not written to `theirs/` and is named for the referee to check |
 | `or-draft` with no `form.json` | `no form.json; run or-fetch --number first` |
 | `or-draft` with no claim pool | `no verified claims in this session; run refereekit review <session>/paper.pdf --session <session> first` |
 | `or-responses` with empty `theirs/` | `no received notes in theirs/; nothing to analyze` |

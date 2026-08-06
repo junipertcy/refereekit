@@ -70,11 +70,17 @@ def profile_id(client) -> str:
         raise ORError(f"could not read your openreview profile: {e}") from e
 
 
-def list_assignments(client, venue: str) -> list:
+def list_assignments(client, venue: str) -> tuple:
     """Assignments are edges from the reviewer's profile to the submission.
 
-    An edge gives head (the submission id) but neither number nor title, so
-    each head is resolved to print a list the referee can act on.
+    Returns (assignments, unreadable head ids). An edge gives head (the
+    submission id) but neither number nor title, so each head is resolved to
+    print a list the referee can act on.
+
+    One head that will not resolve, a withdrawn or desk-rejected paper still
+    carrying an assignment edge being the usual cause, used to lose the whole
+    list. Listing is the entry point to this feature, so the unreadable head is
+    skipped and named and the rest is returned.
     """
     me = profile_id(client)
     try:
@@ -84,16 +90,17 @@ def list_assignments(client, venue: str) -> list:
         raise ORError(
             f"no venue {venue}; check the venue id, "
             f"e.g. ICLR.cc/2027/Conference") from e
-    out = []
+    out, unreadable = [], []
     for edge in edges:
         try:
             note = client.get_note(edge.head)
-        except Exception as e:
-            raise ORError(f"could not read submission {edge.head}: {e}") from e
+        except Exception:
+            unreadable.append(edge.head)
+            continue
         out.append(Assignment(number=note.number, forum=note.id,
                               title=_content_value(note, "title")))
     out.sort(key=lambda a: a.number)
-    return out
+    return out, unreadable
 
 
 def fetch_submission(client, venue: str, number: int) -> tuple:
@@ -122,15 +129,38 @@ def fetch_submission(client, venue: str, number: int) -> tuple:
     return pdf, note.id
 
 
-def fetch_form(client, venue: str, number: int) -> ReviewForm | None:
-    """None when the review stage has not opened yet, which is not an error."""
+def _reason(e: Exception) -> str:
+    """An exception message, safe to print.
+
+    A failure here can be an auth failure, and openreview's own exceptions have
+    echoed request parameters before, so the credentials are redacted out of the
+    text rather than trusted not to appear in it. Credentials come from the
+    environment only, so this is the whole set of values to remove.
+    """
+    text = str(e) or e.__class__.__name__
+    for var in ("OPENREVIEW_PASSWORD", "OPENREVIEW_USERNAME"):
+        secret = os.environ.get(var)
+        if secret:
+            text = text.replace(secret, f"<{var}>")
+    return text
+
+
+def fetch_form(client, venue: str, number: int) -> tuple:
+    """Returns (form or None, reason it is None).
+
+    None when the review stage has not opened yet, which is not an error. It is
+    also None when the lookup failed, which is a different thing entirely: a
+    503 or an expired token reported as "the review stage has not opened" sent
+    the referee to run the or-fetch they had just run. The reason distinguishes
+    the two, so the caller can say which happened.
+    """
     inv_id = f"{venue}/Submission{number}/-/Official_Review"
     try:
         inv = client.get_invitation(inv_id)
-    except Exception:
-        return None
+    except Exception as e:
+        return None, _reason(e) or "no reason given"
     edit = inv.get("edit") if isinstance(inv, dict) else getattr(inv, "edit", None)
-    return parse_form({"id": inv_id, "edit": edit or {}})
+    return parse_form({"id": inv_id, "edit": edit or {}}), ""
 
 
 def our_group_ids(client, venue: str, number: int) -> set | None:
@@ -152,31 +182,55 @@ def our_group_ids(client, venue: str, number: int) -> set | None:
     return {g.id for g in groups}
 
 
-def fetch_replies(client, forum: str) -> list:
+def fetch_replies(client, forum: str) -> tuple:
     """Every reply on the submission's forum: co-reviewers' official reviews,
-    author comments, and our own review once posted."""
+    author comments, and our own review once posted.
+
+    Returns (replies, reason the list is empty). Best-effort, like fetch_form
+    and our_group_ids: raising here exited 2 after paper.pdf, doc.json,
+    form.json and state.json were already on disk, and the pdf is the part the
+    referee needs first.
+    """
     try:
         notes = client.get_all_notes(forum=forum, details="replies")
     except Exception as e:
-        raise ORError(f"could not read the discussion for {forum}: {e}") from e
+        return [], _reason(e)
     replies = []
     for n in notes:
         details = getattr(n, "details", None) or {}
         replies.extend(details.get("replies") or [])
-    return replies
+    return replies, ""
 
 
 def _safe(s) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in str(s))
 
 
+def _epoch_ms(tcdate, note_id: str = "unknown") -> int | None:
+    """OpenReview's own creation time, epoch milliseconds, validated.
+
+    A non-integer reached int() unsanitized while the note id went through
+    _safe, and the resulting bare 'invalid literal for int()' meant nothing to
+    a referee. None for an absent timestamp, which is not an error.
+    """
+    if not tcdate:
+        return None
+    try:
+        return int(tcdate)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f"reply {_safe(note_id)} has a tcdate that is not epoch "
+            f"milliseconds: {_safe(tcdate)}") from e
+
+
 def _iso(tcdate) -> str:
     """OpenReview's own creation time, epoch milliseconds. This reads no local
     clock, so a re-fetch produces the same filename and the same header."""
-    if not tcdate:
+    ms = _epoch_ms(tcdate)
+    if ms is None:
         return "unknown"
     return datetime.datetime.fromtimestamp(
-        int(tcdate) / 1000, tz=datetime.timezone.utc).isoformat()
+        ms / 1000, tz=datetime.timezone.utc).isoformat()
 
 
 def _render_reply(r: dict) -> str:
@@ -231,7 +285,11 @@ def store_replies(session, replies: list, skip_signatures) -> tuple:
     for r in replies:
         if any(s in skip for s in (r.get("signatures") or [])):
             continue
-        name = f"{_safe(r.get('id', 'unknown'))}-{r.get('tcdate', 0)}.txt"
+        note_id = r.get("id", "unknown")
+        # Validated for the message and sanitized for the name: both halves go
+        # through _safe, so neither can steer the write out of theirs/.
+        stamp = _epoch_ms(r.get("tcdate"), note_id) or 0
+        name = f"{_safe(note_id)}-{_safe(stamp)}.txt"
         if not ownership_known and _ownership_unverified(r):
             held.append(name)
             continue

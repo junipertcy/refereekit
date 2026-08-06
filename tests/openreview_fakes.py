@@ -77,10 +77,15 @@ class FakeORClient:
         raise Boom(f"no note {id}")
 
     def get_all_notes(self, **kw):
-        self._log("get_all_notes", **kw)
+        # The discussion query and the submission query share one method, so
+        # each logs under its own name: raise_on needs to fail one without the
+        # other, since a test for a broken discussion endpoint still has to
+        # fetch the submission first.
         if kw.get("forum"):
+            self._log("get_all_notes/forum", **kw)
             return [FakeNote(id=kw["forum"],
                              details={"replies": list(self._replies)})]
+        self._log("get_all_notes", **kw)
         n = self._notes.get(kw.get("number"))
         return [n] if n else []
 

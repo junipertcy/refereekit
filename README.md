@@ -180,9 +180,21 @@ as a field-name-to-value mapping, and `ours/response-analysis.txt`.
 
 **Exit codes:** all three return 0 on success and 2 on an input error, with the
 reason on stderr. An input error means a bad venue id, a submission not assigned
-to you, a download that is not a pdf, a missing session, a session with no
-`form.json`, an empty `theirs/`, a malformed `--length`, or a missing optional
-dependency. Nothing is written when a command exits 2.
+to you, a download that is not a pdf, a session pointed at a different paper, a
+missing session, a session with no `form.json`, a session with no claim pool, an
+empty `theirs/`, a malformed `--length`, or a missing optional dependency.
+
+An exit 2 does not guarantee an empty session directory. `or-fetch` validates
+what it can before writing, and rejects a download that is not a pdf before
+`paper.pdf` is created, but a file that begins with `%PDF` and is then found
+malformed leaves `paper.pdf` on disk. Read the message rather than the presence
+of files: when `or-fetch` exits 2 after writing, the session is not a fetched
+paper and re-fetching into it is the right move.
+
+A failure to read the review form or the discussion is not an exit 2. Those
+steps are best-effort: `or-fetch` prints what it could not read, leaves
+`form.json` absent or `theirs/` empty, and exits 0, because the PDF is the part
+you need first and a later `or-fetch` picks up the rest.
 
 **`--baseurl`** points `or-fetch` at a different OpenReview deployment. It
 defaults to `https://api2.openreview.net`. Use
