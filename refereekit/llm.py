@@ -36,28 +36,136 @@ def complete(
     return backend(prompt)
 
 
-class AnthropicBackend:
-    """Thin real backend. Not unit-tested against the network."""
+# The Anthropic SDK speaks one messages API to every deployment it supports, so
+# which deployment refereekit talks to is a *client*, not a class. Each entry is
+# a factory and the model id that deployment uses, because the same model is
+# named differently on each and one default cannot serve all of them.
+#
+# "model" is None when no default has been run against that deployment. A
+# fabricated default is worse than none: it looks authoritative, gets copied
+# into scripts and documentation, and fails at the provider with an error that
+# names the model rather than the mistake. None makes refereekit ask for the id
+# instead of guessing at one, and there is no third state for the next entry to
+# fall into.
+#
+# Nothing here is privileged: the direct API is the default only because it is
+# the one a referee with an API key already has.
+DEPLOYMENTS: dict[str, dict] = {
+    "anthropic": {
+        "client": lambda: _sdk().Anthropic(),
+        "model": "claude-opus-4-8",
+    },
+    "bedrock": {
+        # Region and credentials come from the usual AWS chain, which the SDK
+        # reads itself; refereekit never touches them.
+        "client": lambda: _sdk().AnthropicBedrockMantle(),
+        "model": "anthropic.claude-opus-5",
+    },
+    "vertex": {
+        "client": lambda: _sdk().AnthropicVertex(),
+        # Unconfirmed: the client is real SDK code, but no model id here has
+        # been run against Vertex, so refereekit does not name one.
+        "model": None,
+    },
+}
 
-    def __init__(
-        self, model: str, zero_retention: bool, api_key: str | None = None
-    ):
-        import anthropic  # lazy: package imports without the SDK
 
-        self.zero_retention = zero_retention
-        self._model = model
-        self._client = (
-            anthropic.Anthropic(api_key=api_key)
-            if api_key
-            else anthropic.Anthropic()
+class DeploymentError(ValueError):
+    """Raised when a deployment cannot be constructed.
+
+    A ValueError so the CLI's existing handlers report it as a clean error
+    rather than a traceback: the SDK signals missing region or credentials with
+    AnthropicError, which is not one.
+    """
+
+
+class UnknownDeployment(DeploymentError):
+    """Raised for a deployment name that is not registered.
+
+    Distinct from the plain ValueError the SDK raises for a real deployment that
+    is misconfigured, so that "you typed it wrong" cannot be mistaken for "your
+    region is unset".
+    """
+
+
+def _sdk():
+    import anthropic  # lazy: the package imports without the SDK installed
+    return anthropic
+
+
+def _entry(name: str) -> dict:
+    try:
+        return DEPLOYMENTS[name]
+    except KeyError:
+        raise UnknownDeployment(
+            f"unknown deployment {name!r}; expected one of "
+            f"{', '.join(sorted(DEPLOYMENTS))}"
+        ) from None
+
+
+def default_model(name: str) -> str:
+    """The model id this deployment is known to serve.
+
+    Raises when the deployment has no confirmed default, rather than returning a
+    plausible guess, and names the setting that supplies one.
+    """
+    model = _entry(name)["model"]
+    if model is None:
+        raise DeploymentError(
+            f"deployment {name!r} has no confirmed default model; "
+            f"set REFEREEKIT_MODEL to the id you want to use"
         )
+    return model
+
+
+def client_for(name: str):
+    """Build the SDK client for a deployment. Configuration is the SDK's job.
+
+    Region, project and credentials are read by the SDK from the same
+    environment the provider's own tooling uses, so refereekit never handles
+    them and never has to be taught a new provider's config scheme.
+    """
+    factory = _entry(name)["client"]
+    try:
+        return factory()
+    except UnknownDeployment:
+        raise
+    except Exception as e:
+        # The SDK's message names the exact variable to set, which is more
+        # useful than anything this layer could say; only the type is wrong.
+        raise DeploymentError(f"cannot use deployment {name!r}: {e}") from e
+
+
+class AnthropicBackend:
+    """Backend over the Anthropic SDK. Not unit-tested against the network.
+
+    The deployment is injected as a client rather than subclassed, because every
+    deployment the SDK offers exposes the same messages API and differs only in
+    how the client is constructed. That also makes the backend testable without
+    a network.
+
+    The call streams: a thinking model can exceed the non-streaming timeout on a
+    long manuscript prompt. max_tokens is high because thinking and text share
+    that budget, and the previous 4096 truncated a reasoning model mid-answer.
+    """
+
+    def __init__(self, model: str, zero_retention: bool, *, client=None,
+                 api_key: str | None = None, max_tokens: int = 16000):
+        self.zero_retention = zero_retention
+        self.client = client if client is not None else (
+            _sdk().Anthropic(api_key=api_key) if api_key
+            else client_for("anthropic")
+        )
+        self._model = model
+        self._max_tokens = max_tokens
 
     def __call__(self, prompt: str) -> str:
-        msg = self._client.messages.create(
+        with self.client.messages.stream(
             model=self._model,
-            max_tokens=4096,
+            max_tokens=self._max_tokens,
             messages=[{"role": "user", "content": prompt}],
-        )
+        ) as stream:
+            msg = stream.get_final_message()
         return "".join(
             b.text for b in msg.content if getattr(b, "type", None) == "text"
         )

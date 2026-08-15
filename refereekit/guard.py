@@ -1,33 +1,44 @@
 import re
+from .textnorm import collapse, fold, line_break_readings
 from .types import Document
 
 class ManuscriptLeakError(ValueError):
     pass
 
 def _normalize(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip().lower()
+    return collapse(s)
 
 def _ngrams(text: str, n: int) -> set[tuple[str, ...]]:
-    words = re.findall(r"\w+", text.lower())
+    words = re.findall(r"\w+", fold(text).lower())
     return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
 
 def _normalize_words(text: str) -> str:
     """Normalize text to space-joined lowercase words for verbatim matching."""
-    return " ".join(re.findall(r"\w+", text.lower()))
+    return " ".join(re.findall(r"\w+", fold(text).lower()))
+
+def _page_readings(doc: Document) -> list[str]:
+    """Every spelling of every page, including words broken across a line.
+
+    A word the typesetter split is still manuscript text when the referee writes
+    it whole, so both readings are searched here exactly as `verify` searches
+    both when checking a quotation.
+    """
+    return [r for p in doc.pages for r in line_break_readings(p.text)]
+
 
 def is_verbatim_fragment(text: str, doc: Document, *, n: int = 8) -> bool:
-    words = re.findall(r"\w+", text)
+    words = re.findall(r"\w+", fold(text))
 
     # (a) Existing behavior: short text (< n words) checked as-is
     if len(words) < n:
         norm = _normalize(text)
         if not norm:
             return False
-        return any(norm in _normalize(p.text) for p in doc.pages)
+        return any(norm in _normalize(r) for r in _page_readings(doc))
 
     # (b) New behavior: long text (>= n words) checked for embedded n-word runs
     # Cache normalized page strings for efficiency
-    normalized_pages = [_normalize_words(p.text) for p in doc.pages]
+    normalized_pages = [_normalize_words(r) for r in _page_readings(doc)]
 
     # Check each n-word window
     for i in range(len(words) - n + 1):
@@ -43,7 +54,7 @@ def assert_no_manuscript(text: str, doc: Document, *, n: int = 8, max_overlap: i
         raise ManuscriptLeakError("cannot verify against an empty document")
 
     # Primary gate: embedded-fragment check catches single contiguous runs (long text)
-    words = re.findall(r"\w+", text)
+    words = re.findall(r"\w+", fold(text))
     if is_verbatim_fragment(text, doc, n=n):
         if len(words) < n:
             raise ManuscriptLeakError("input is a verbatim manuscript fragment (short verbatim manuscript fragment)")
@@ -55,8 +66,8 @@ def assert_no_manuscript(text: str, doc: Document, *, n: int = 8, max_overlap: i
     if not q:
         return
     doc_ngrams: set[tuple[str, ...]] = set()
-    for p in doc.pages:
-        doc_ngrams |= _ngrams(p.text, n)
+    for reading in _page_readings(doc):
+        doc_ngrams |= _ngrams(reading, n)
     overlap = len(q & doc_ngrams)
     if overlap > max_overlap:
         raise ManuscriptLeakError(

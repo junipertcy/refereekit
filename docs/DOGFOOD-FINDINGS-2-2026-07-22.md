@@ -64,3 +64,55 @@ only PASS equation ids within the detected contiguous run (e.g. 1..max-contiguou
 - **Still open (deferred):** verbatim quote matching (paraphrase/nearest-line);
   contiguous-run equation filtering (chose the conservative drop-"0" only);
   report/editor DRY helper; diagram refresh.
+
+## Resolved by typography folding (2026-08-15)
+
+- **Verbatim quote matching:** RESOLVED, and it was a correctness bug rather
+  than the usability nuance both dogfood passes recorded. `verify` compared raw
+  codepoints, so a *correctly copied* quotation failed whenever extraction had
+  handed back a ligature, a wide dash, a Unicode minus, a curly quote, a soft
+  hyphen, or a word broken across a line. On the real fixture — 51 ligatures, 50
+  dashes, 128 line-break hyphenations — `"a finite set of nodes"` returned FAIL.
+  Comparison now folds typography on both sides via `refereekit/textnorm.py`.
+  Folding only: every rule maps two spellings of the same characters onto one,
+  so a genuine misquotation still FAILs, and a hyphen inside a line stays
+  content (`58%` does not match `5-8%`).
+- **Nearest line on FAIL:** RESOLVED. A failed quotation now reports the closest
+  line on the page, so a slip in transcription is distinguishable from words
+  that are absent. Diagnostic only; it never changes the verdict.
+- **Leak guard had the mirror defect:** found while fixing the above. The same
+  missing fold made `assert_no_manuscript` too *lax*: a short verbatim fragment
+  retyped without the ligature was allowed into memory, defeating the
+  fail-closed guarantee for exactly the text a referee is most likely to write.
+  Now folds identically. The two are one bug with opposite signs, which is why
+  the normalization is shared rather than duplicated.
+- **Still open (deferred):** contiguous-run equation filtering (noise ids above
+  the real range can still PASS); report/editor DRY helper; diagram refresh.
+
+## Resolved by harden-verification-guarantees (2026-08-15)
+
+- **Finding 2, remaining half (noise equation ids):** RESOLVED. Dropping id "0"
+  handled the demonstrated case; the rest stayed open, and the real fixture
+  showed why that mattered — of twenty numeric ids extracted, only 1..7 are
+  labels, so `verify --kind equation --anchor 500` returned PASS. An equation
+  anchor now passes only inside the contiguous run of extracted ids beginning at
+  1, which keeps every genuine label on this paper and rejects all thirteen
+  noise ids. The verdict is FAIL rather than FLAG on purpose: `agent/loop.py`
+  records FLAG anchors into the claim pool so bare page pointers stay citable,
+  so FLAG here would leave a citation to a nonexistent equation available to the
+  draft. The evidence distinguishes "outside the range extraction can vouch for"
+  from "not found at all". Anchoring the run at 1 rather than at the lowest
+  extracted id is deliberate: papers number from 1, and anchoring at the minimum
+  would let a low noise value become the floor.
+- **`report`/`editor_letter` shared verify helper:** CLOSED as won't-do. Measured
+  at eleven and nine lines with 0.56 similarity; extracting a helper from two
+  functions that small and that different is churn that makes both harder to
+  read.
+- **Found while closing this out:** `review` read its venue only from `--venue`
+  or a spec, never from the session state `or-fetch` had already written. The
+  documented OpenReview flow passes `--venue` explicitly, so forgetting it sent
+  the manuscript for a venue that prohibits outside models. Caught by a new
+  coverage test that enumerates the CLI's subcommands rather than listing the
+  gated ones — the first thing it found on its first run.
+- **Still open (deferred):** section-numbered equation labels ("2.1") are outside
+  the numeric run rule and keep prior behaviour; diagram refresh.

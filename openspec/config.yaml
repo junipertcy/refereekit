@@ -1,0 +1,49 @@
+schema: spec-driven
+
+context: |
+  refereekit automates a serial referee's paper-review workflow: ingest a
+  submitted PDF, verify every factual anchor against it, and draft a referee
+  report and editor letter in the referee's own voice.
+
+  Python 3.11+, stdlib-first. The only runtime dependency is PyMuPDF; anthropic
+  and openreview-py are optional extras, imported lazily so the package imports
+  without them. Tests are pytest and run fully offline — never add one that
+  needs a network call or an API key; use REFEREEKIT_FAKE=1 or FakeBackend.
+
+  Confidentiality is the design's centre, not a feature of it. Manuscripts under
+  review are confidential, so:
+    - manuscript text, and anything derived from it, is never committed
+    - it reaches a model only through llm.complete(), which refuses a backend
+      not marked zero_retention
+    - guard.assert_no_manuscript() fails closed: an empty or unreadable document
+      is a rejection, not a pass
+    - a venue may forbid outside models regardless of transport; commands that
+      send manuscript-derived text check policy.assert_llm_permitted() before a
+      backend exists
+    - work/ is per-review scratch and git-ignored; never `git add -A`
+
+  Verification is the product. PASS is an assertion a referee relies on when
+  citing, so requirements should be biased toward refusing rather than
+  asserting: a false FAIL costs an argument with the tool, a false PASS puts a
+  wrong citation into a report sent under the referee's name. Note that FLAG is
+  not a neutral middle — agent/loop.py records FLAG anchors into the claim pool
+  so bare page pointers stay citable, so FLAG on something nonexistent is nearly
+  as harmful as PASS.
+
+  Every module is a plain Python API and a CLI subcommand; cli.py is a thin
+  wrapper. Put logic in the module, never in cli.py. Check ordering matters:
+  input errors and policy refusals are reported before a backend is built and
+  before the PDF is read.
+
+  Development is test-first — write the failing test, watch it fail for the
+  right reason, then implement. Comments explain why, not what; match the
+  density already in the file. Design specs and plans for the pre-OpenSpec
+  phases live in docs/superpowers/.
+
+rules:
+  proposal:
+    - State the guarantee at risk, not just the feature being added
+    - Include a Non-goals section naming what was considered and left out
+  specs:
+    - Prefer a scenario that would have caught a real past failure
+    - Say which verdict is expected, and where it matters, why not the others

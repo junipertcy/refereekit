@@ -5,6 +5,30 @@ Standalone, harness-portable toolkit that automates a paper-review workflow.
 > **New here?** See **[QUICKSTART.md](QUICKSTART.md)** — the one-command way to review a
 > paper. This README documents every individual tool and the build phases behind them.
 
+## Venue policy
+
+Zero-retention terms are not a blanket permission. Some venues forbid sending a
+submission to any model they do not host, however well the transport behaves.
+
+`refereekit review`, `draft`, `editor` and `or-draft` refuse to run for such a
+venue, before a backend is built and before the PDF is opened. The venue comes
+from `--venue`, from the review spec, or from the session state that `or-fetch`
+already records — so the check needs nothing restated on the command line.
+
+The built-in table currently carries one entry, NeurIPS, matched against both
+the bare name and the OpenReview id (`NeurIPS.cc/2026/Conference`). Extend or
+override it with a TOML file at `REFEREEKIT_VENUE_POLICY`:
+
+    [venues]
+    "Some Journal" = { llm = false }
+    NeurIPS = { llm = true }        # if the rule ever changes
+
+**Unlisted venues are permitted.** Code cannot know every venue's policy, and
+refusing the unknown would make the tool useless for the long tail of journals.
+This mechanism makes the prohibitions you already know about impossible to
+forget; it does not discover them. Keeping the table current is the referee's
+job, as §2 of the design spec has always said.
+
 ## Confidentiality
 Confidential manuscripts and text derived from them are never committed. The only
 committable PDF is the test fixture under `tests/fixtures/`. Manuscript text is
@@ -45,6 +69,43 @@ Generate referee reports and editor letters using a verified claim pool.
 - **Real LLM (zero-retention only):** Set `REFEREEKIT_ZERO_RETENTION=1` to confirm
   zero-retention terms. Optionally set `REFEREEKIT_MODEL` (default: `claude-opus-4-8`).
   Requires the `anthropic` package: `pip install -e ".[llm]"`
+- **Deployment:** `REFEREEKIT_BACKEND` selects which deployment of the Anthropic
+  SDK to talk to — `anthropic` (default), `bedrock`, or `vertex`. There is one
+  backend class; the deployment is the client it holds. An unregistered name is
+  refused, because a misspelling must not quietly become the default and send
+  the manuscript somewhere you did not choose.
+
+  Region, project and credentials are read by the SDK from the same environment
+  the provider's own tooling uses (`AWS_REGION`, `AWS_PROFILE`, and so on), so
+  refereekit never handles them.
+
+  `REFEREEKIT_MODEL` defaults per deployment, since each names the same model
+  differently — but only where that id has actually been run against that
+  deployment. A deployment with no confirmed default refuses and names
+  `REFEREEKIT_MODEL` rather than shipping a plausible guess: a fabricated id
+  looks authoritative, gets copied into scripts, and fails at the provider with
+  an error naming the model instead of the mistake. `vertex` is in that state
+  today — the client is real SDK code, the model id has never been confirmed.
+
+**What the attestation means.** `REFEREEKIT_ZERO_RETENTION=1` is an attestation
+*you* make, not something the code can verify — `complete()` only checks that
+the flag was set. It is about the account behind the client, so what you are
+asserting depends on where that client points:
+
+| Deployment | Data processor | What `=1` asserts |
+|---|---|---|
+| `anthropic` | Anthropic | Your organization has a zero-data-retention arrangement. |
+| `bedrock` | AWS | Your AWS account has no model-invocation logging configured. |
+| `vertex` | Google Cloud | Your project's logging and retention settings permit it. (No confirmed default model — set `REFEREEKIT_MODEL`.) |
+
+Only `anthropic` needs no further setup, which is why it is the default. On the
+cloud deployments the provider rather than Anthropic is the data processor, so
+Anthropic's retention terms do not govern the request — the practical route when
+a first-party zero-data-retention arrangement is not available. An SSO-based AWS
+profile additionally needs `pip install "botocore[crt]"`.
+
+Adding a deployment is one entry in `DEPLOYMENTS` in `refereekit/llm.py`: a
+client factory and a default model id. No new class, and no change here.
 
 **Commands:**
     # Generate a referee report
@@ -109,7 +170,35 @@ with a zero-retention LLM for real reviews.
 7. **Editor letter** — generate editor response letter with optional editor-question answers
 
 **Command:**
-    refereekit review <pdf> --session <dir> [--venue <venue>]
+    refereekit review <pdf> --session <dir> [--venue <venue>] [--spec <file>]
+
+### Review specs
+
+The gates above prompt for typed answers. A real verdict is considered prose
+drafted over days, and the questions worth asking a manuscript are equally
+deliberate — neither is something you compose at a `verdict (recommend)>`
+prompt. `--spec` supplies all of them from a TOML file, so a review runs with no
+terminal interaction:
+
+    refereekit review paper.pdf --session ./work/paperA --spec ./work/paperA/review.toml
+
+See **[docs/review-spec.example.toml](docs/review-spec.example.toml)** for the
+full format. In brief: `questions` (required, non-empty), a `[verdict]` table
+(`recommend`, `venue`, `major_minor`, all required), and optional
+`[section_lengths]` and `[editor_answers]` tables. A top-level `venue` supplies
+`--venue`.
+
+TOML rather than JSON or YAML: `tomllib` is in the standard library from 3.11,
+and triple-quoted strings keep a thousand-word verdict readable. JSON would put
+it on one escaped line.
+
+The spec is parsed before the backend is built and before the PDF is opened, so
+a spec that cannot drive the run fails while nothing has been sent anywhere.
+
+Keep the spec beside its session. It is the record of what you asked and what
+you concluded, and it makes a review re-runnable after an ingest fix without
+retyping a word. A real spec quotes the manuscript, so it is confidential —
+write it under `work/`, never in the repo.
 
 **Example (offline, no network):**
     export REFEREEKIT_FAKE=1
@@ -297,9 +386,37 @@ is the floor at which a match stops being accidental.
 ## Extraction limits
 
 - **Figures:** Reliably extracted from caption lines (handles "FIG." and "Figure" prefixes).
+- **Equation anchors:** An equation anchor verifies only inside the contiguous
+  run of extracted ids beginning at 1. Extraction yields real labels and noise
+  indiscriminately — the test fixture gives twenty numeric ids of which seven are
+  labels — and a PASS is what a referee relies on when citing, so it is confined
+  to the range extraction can vouch for. An anchor above the run FAILs rather
+  than FLAGs, because a FLAG would enter the claim pool and stay available to the
+  draft. Section-numbered labels ("2.1") are outside this rule and keep prior
+  behaviour.
 - **Equation numbers:** Best-effort extraction via right-margin geometry. Equation **bodies are not reconstructed** — PDF math rendering is lossy (bitmaps/glyphs, not LaTeX); source is unavailable post-compile. Noisy IDs remain possible on papers with complex multi-column layouts.
 - **Sections:** Best-effort heading detection. Papers with non-standard heading styles (e.g., no caps/roman numerals in the text layer) may surface few or no sections.
 - **Most reliable path:** Quote/page verification remains the robust anchor for review workflows.
+
+### Typography folding
+
+A quotation is compared after folding the typography a PDF adds, so a correctly
+copied sentence verifies whatever the extractor handed back: the fi ligature,
+dashes of any width, the Unicode minus, curly quotation marks, soft hyphens, and
+words the typesetter broke across a line (both readings are searched, so
+`combina-torial` and `well-known` both work). The real fixture contains 51
+ligatures, 50 dashes of three kinds, and 128 line breaks inside words — before
+this, `"a finite set of nodes"` was reported FAIL.
+
+**This is folding, not fuzzy matching.** Each rule maps two spellings of the
+same characters onto one; none widens what counts as a match, so PASS still
+means the words are there. A hyphen *inside* a line stays content — a quotation
+of `58%` does not match a paper's `5-8%`. On FAIL, the nearest line on the page
+is reported as a diagnostic, which never changes the verdict.
+
+The leak guard folds identically (`refereekit/textnorm.py` is shared). It had
+the mirror of the same defect: a manuscript fragment retyped without the
+ligature was *allowed* into memory.
 
 ## Test
     .venv/bin/pytest -v

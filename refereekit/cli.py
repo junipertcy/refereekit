@@ -10,6 +10,8 @@ from . import render
 from .memory import SQLiteMemoryStore, Note
 from .guard import ManuscriptLeakError
 from .agent import run_review
+from .spec import load_spec, scripted_input
+from .policy import assert_llm_permitted, VenuePolicyError
 
 # Default style guide path (repo root / style / STYLE.md)
 _DEFAULT_STYLE = Path(__file__).resolve().parent.parent / "style" / "STYLE.md"
@@ -18,11 +20,32 @@ def _backend():
     from .llm import FakeBackend
     if os.environ.get("REFEREEKIT_FAKE") == "1":
         return FakeBackend(os.environ.get("REFEREEKIT_FAKE_TEXT", "draft"))
-    from .llm import AnthropicBackend
+    from .llm import AnthropicBackend, client_for, default_model
+    # Which deployment of the Anthropic SDK to talk to. There is one backend;
+    # the deployment is the client it holds, so adding one is a registry entry
+    # in llm.py rather than a class and a branch here.
+    deployment = os.environ.get("REFEREEKIT_BACKEND", "anthropic")
     return AnthropicBackend(
-        model=os.environ.get("REFEREEKIT_MODEL", "claude-opus-4-8"),
+        # Resolved before the client is built so an unknown deployment is
+        # reported as the typo it is, not as a missing region.
+        model=os.environ.get("REFEREEKIT_MODEL") or default_model(deployment),
+        # The attestation is about the account behind the client, not about
+        # which deployment was chosen.
         zero_retention=os.environ.get("REFEREEKIT_ZERO_RETENTION") == "1",
+        client=client_for(deployment),
     )
+
+
+def _session_venue(session) -> str | None:
+    """The venue this session belongs to, however it was recorded.
+
+    or-fetch writes it at the top level; run_review writes it inside the verdict
+    it saves. Either is authoritative, so a command that did not take --venue can
+    still tell which venue's rules apply.
+    """
+    return (session.get_state("venue")
+            or (session.get_state("verdict") or {}).get("venue"))
+
 
 def _write_draft(session, name, draft):
     d = session.ours_dir
@@ -75,6 +98,8 @@ def main(argv=None) -> int:
     prv.add_argument("pdf")
     prv.add_argument("--session", required=True)
     prv.add_argument("--venue")
+    prv.add_argument("--spec", help="TOML review spec; drives every gate "
+                                    "without typed input")
     prv.add_argument("--db")
     prv.add_argument("--style", default=None)
     pof = sub.add_parser("or-fetch")
@@ -129,13 +154,16 @@ def main(argv=None) -> int:
             from . import drafts
             from .llm import RetentionError
             s = Session(Path(args.session))
+            # Before _backend(): the session records its venue, so the venue's
+            # rule about outside models is knowable without --venue here.
+            assert_llm_permitted(_session_venue(s))
             lengths = dict(x.split("=", 1) for x in args.length)
             # Choose style path: --style arg > REFEREEKIT_STYLE env > default
             style_path = args.style or os.environ.get("REFEREEKIT_STYLE") or str(_DEFAULT_STYLE)
             d = drafts.report(s, s.get_state("verdict", {}), lengths,
                               backend=_backend(), style_path=style_path)
             _write_draft(s, "report", d); return 0
-        except (FileNotFoundError, ValueError, RetentionError) as e:
+        except (FileNotFoundError, ValueError, RetentionError, VenuePolicyError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
 
@@ -144,12 +172,13 @@ def main(argv=None) -> int:
             from . import drafts
             from .llm import RetentionError
             s = Session(Path(args.session))
+            assert_llm_permitted(_session_venue(s))
             answers = dict(x.split("=", 1) for x in args.answers)
             # Choose style path: --style arg > REFEREEKIT_STYLE env > default
             style_path = args.style or os.environ.get("REFEREEKIT_STYLE") or str(_DEFAULT_STYLE)
             d = drafts.editor_letter(s, answers, backend=_backend(), style_path=style_path)
             _write_draft(s, "editor", d); return 0
-        except (FileNotFoundError, ValueError, RetentionError) as e:
+        except (FileNotFoundError, ValueError, RetentionError, VenuePolicyError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
 
@@ -175,17 +204,32 @@ def main(argv=None) -> int:
     if args.cmd == "review":
         try:
             from .llm import RetentionError
+            # Parsed first, before the backend is built and before any page of
+            # the manuscript is read: a spec that cannot drive the run must fail
+            # while nothing has been sent anywhere.
+            spec = load_spec(args.spec) if args.spec else None
+            kwargs = {"input_fn": scripted_input(spec)} if spec else {}
             sdir = Path(args.session)
+            # A session created by or-fetch already records its venue, so a
+            # review run against it honours that even when --venue is not
+            # repeated on the command line. Without this fallback the documented
+            # OpenReview flow sends the manuscript whenever the flag is
+            # forgotten, which the venue-gate coverage test caught.
+            venue = (args.venue or (spec.venue if spec else None)
+                     or _session_venue(Session(sdir)))
+            # Before the PDF is opened and before a backend exists.
+            assert_llm_permitted(venue)
             db = args.db or str(sdir / "memory.db")
-            if args.venue:
+            if venue:
                 sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists
-            mem = SQLiteMemoryStore(db) if args.venue else None
+            mem = SQLiteMemoryStore(db) if venue else None
             # Style path: --style arg > REFEREEKIT_STYLE env > default (same as draft/editor).
             # Use the location-anchored default so `review` works from any cwd, not just repo root.
             style_path = args.style or os.environ.get("REFEREEKIT_STYLE") or str(_DEFAULT_STYLE)
             res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
-                           style_path=style_path, memory=mem, venue=args.venue)
-        except (FileNotFoundError, ValueError, RetentionError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError, EOFError) as e:
+                           style_path=style_path, memory=mem, venue=venue,
+                           **kwargs)
+        except (FileNotFoundError, ValueError, RetentionError, VenuePolicyError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError, EOFError) as e:
             print(f"review failed: {e}", file=sys.stderr)
             return 2
         print(f"review complete: {res.report_path}, {res.editor_path} ({len(res.flags)} flag(s))")
@@ -302,6 +346,10 @@ def main(argv=None) -> int:
         from .openreview import form as orform
         try:
             s = Session(Path(args.session))
+            # First, before the form is read and well before a backend exists:
+            # or-fetch recorded the venue, so the venue's own rule about outside
+            # models is knowable here without the referee restating it.
+            assert_llm_permitted(s.get_state("venue"))
             form_path = s.dir / "form.json"
             if not form_path.exists():
                 print("error: no form.json; run or-fetch --number first",
@@ -346,7 +394,7 @@ def main(argv=None) -> int:
             for f in filled.blanks:
                 print(f"  {f.name:<24} {_blank_span(f):<10} {f.description[:48]}")
             return 0
-        except (FileNotFoundError, ValueError, RetentionError,
+        except (FileNotFoundError, ValueError, RetentionError, VenuePolicyError,
                 sqlite3.OperationalError, ImportError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
@@ -356,6 +404,10 @@ def main(argv=None) -> int:
         from .openreview import responses as orresponses
         try:
             s = Session(Path(args.session))
+            # Author responses quote and characterise the paper, so analyze()
+            # sends them with manuscript_ok=True. That puts this command on the
+            # manuscript path and under the same venue rule as or-draft.
+            assert_llm_permitted(_session_venue(s))
             # A typo in --session is the usual cause, and it needs its own
             # message. Reported before reading theirs/, and reached as a plain
             # path rather than through the theirs_dir property, because that

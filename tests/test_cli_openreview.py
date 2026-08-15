@@ -466,3 +466,43 @@ def test_or_responses_with_nothing_received_exits_2(tmp_path, capsys):
     rc = main(["or-responses", "--session", str(s.dir)])
     assert rc == 2
     assert "nothing to analyze" in capsys.readouterr().err
+
+
+def test_or_draft_refuses_a_venue_that_prohibits_outside_models(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """or-fetch records the venue, so or-draft can enforce the venue's rule.
+
+    A session fetched from a venue that forbids sending submissions to an
+    outside model must not be drafted from, however the environment is set. The
+    manuscript is already on disk at this point; the check has to sit in front
+    of the send, not in front of the fetch.
+    """
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    Session(sess).set_state("venue", "NeurIPS.cc/2026/Conference")
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_ZERO_RETENTION", "1")
+    rc = main(["or-draft", "--session", str(sess)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "prohibits" in err.lower()
+    assert not (sess / "ours" / "openreview.md").exists()
+
+
+def test_or_responses_refuses_a_venue_that_prohibits_outside_models(
+        monkeypatch, tmp_path, real_pdf_path, capsys):
+    """Author responses travel the manuscript path, so they take the same gate.
+
+    responses.analyze sends with manuscript_ok=True by design -- a response
+    quotes and characterises the paper. Gating or-draft but not this one leaves
+    the prohibition half-enforced on exactly the sessions it exists for.
+    """
+    sess = _fetched_session(monkeypatch, tmp_path, real_pdf_path)
+    Session(sess).set_state("venue", "NeurIPS.cc/2026/Conference")
+    (Path(sess) / "theirs").mkdir(exist_ok=True)
+    (Path(sess) / "theirs" / "r1.txt").write_text("A response about the paper.")
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_ZERO_RETENTION", "1")
+    rc = main(["or-responses", "--session", str(sess)])
+    assert rc == 2
+    assert "prohibits" in capsys.readouterr().err.lower()
+    assert not (Path(sess) / "ours" / "response-analysis.txt").exists()
