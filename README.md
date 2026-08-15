@@ -45,6 +45,26 @@ Generate referee reports and editor letters using a verified claim pool.
 - **Real LLM (zero-retention only):** Set `REFEREEKIT_ZERO_RETENTION=1` to confirm
   zero-retention terms. Optionally set `REFEREEKIT_MODEL` (default: `claude-opus-4-8`).
   Requires the `anthropic` package: `pip install -e ".[llm]"`
+- **Transport:** `REFEREEKIT_BACKEND` selects `anthropic` (default) or `bedrock`.
+  Any other value is refused — a misspelled transport must not quietly become the
+  default, since that would send the manuscript over a path the referee did not
+  choose. Model defaults follow the transport (`claude-opus-4-8` vs
+  `anthropic.claude-opus-5`), so set `REFEREEKIT_MODEL` only alongside a matching
+  `REFEREEKIT_BACKEND`.
+
+**Which transport, and what the attestation means.** `REFEREEKIT_ZERO_RETENTION=1`
+is an attestation *you* make, not something the code can verify — `complete()`
+only checks that the flag was set. What you are attesting differs by transport:
+
+| Transport | Data processor | What `=1` asserts |
+|---|---|---|
+| `anthropic` | Anthropic | Your organization has a zero-data-retention arrangement. |
+| `bedrock` | AWS | Your AWS account has no model-invocation logging configured. |
+
+On `bedrock`, Anthropic's retention terms do not govern the request at all, so
+this is the practical route when a first-party ZDR arrangement is not available.
+Credentials come from the usual AWS chain and are never read by refereekit; an
+SSO-based profile additionally needs `pip install "botocore[crt]"`.
 
 **Commands:**
     # Generate a referee report
