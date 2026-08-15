@@ -16,34 +16,25 @@ from .policy import assert_llm_permitted, VenuePolicyError
 # Default style guide path (repo root / style / STYLE.md)
 _DEFAULT_STYLE = Path(__file__).resolve().parent.parent / "style" / "STYLE.md"
 
-# Per-transport model defaults. Bedrock names a model differently from the
-# first-party API, so one default cannot serve both.
-_DEFAULT_MODEL = {"anthropic": "claude-opus-4-8", "bedrock": "anthropic.claude-opus-5"}
-
-
 def _backend():
     from .llm import FakeBackend
     if os.environ.get("REFEREEKIT_FAKE") == "1":
         return FakeBackend(os.environ.get("REFEREEKIT_FAKE_TEXT", "draft"))
-    transport = os.environ.get("REFEREEKIT_BACKEND", "anthropic")
-    if transport not in _DEFAULT_MODEL:
-        raise ValueError(
-            f"unknown REFEREEKIT_BACKEND {transport!r}; "
-            f"expected one of {', '.join(sorted(_DEFAULT_MODEL))}"
-        )
-    # The attestation is about the account, not the transport, so it is read
-    # once and threaded into whichever backend is built.
-    zero_retention = os.environ.get("REFEREEKIT_ZERO_RETENTION") == "1"
-    model = os.environ.get("REFEREEKIT_MODEL") or _DEFAULT_MODEL[transport]
-    if transport == "bedrock":
-        from .llm import BedrockBackend
-        return BedrockBackend(
-            model=model,
-            zero_retention=zero_retention,
-            region=os.environ.get("AWS_REGION", "us-east-1"),
-        )
-    from .llm import AnthropicBackend
-    return AnthropicBackend(model=model, zero_retention=zero_retention)
+    from .llm import AnthropicBackend, client_for, default_model
+    # Which deployment of the Anthropic SDK to talk to. There is one backend;
+    # the deployment is the client it holds, so adding one is a registry entry
+    # in llm.py rather than a class and a branch here.
+    deployment = os.environ.get("REFEREEKIT_BACKEND", "anthropic")
+    return AnthropicBackend(
+        # Resolved before the client is built so an unknown deployment is
+        # reported as the typo it is, not as a missing region.
+        model=os.environ.get("REFEREEKIT_MODEL") or default_model(deployment),
+        # The attestation is about the account behind the client, not about
+        # which deployment was chosen.
+        zero_retention=os.environ.get("REFEREEKIT_ZERO_RETENTION") == "1",
+        client=client_for(deployment),
+    )
+
 
 def _session_venue(session) -> str | None:
     """The venue this session belongs to, however it was recorded.

@@ -69,26 +69,36 @@ Generate referee reports and editor letters using a verified claim pool.
 - **Real LLM (zero-retention only):** Set `REFEREEKIT_ZERO_RETENTION=1` to confirm
   zero-retention terms. Optionally set `REFEREEKIT_MODEL` (default: `claude-opus-4-8`).
   Requires the `anthropic` package: `pip install -e ".[llm]"`
-- **Transport:** `REFEREEKIT_BACKEND` selects `anthropic` (default) or `bedrock`.
-  Any other value is refused — a misspelled transport must not quietly become the
-  default, since that would send the manuscript over a path the referee did not
-  choose. Model defaults follow the transport (`claude-opus-4-8` vs
-  `anthropic.claude-opus-5`), so set `REFEREEKIT_MODEL` only alongside a matching
-  `REFEREEKIT_BACKEND`.
+- **Deployment:** `REFEREEKIT_BACKEND` selects which deployment of the Anthropic
+  SDK to talk to — `anthropic` (default), `bedrock`, or `vertex`. There is one
+  backend class; the deployment is the client it holds. An unregistered name is
+  refused, because a misspelling must not quietly become the default and send
+  the manuscript somewhere you did not choose.
 
-**Which transport, and what the attestation means.** `REFEREEKIT_ZERO_RETENTION=1`
-is an attestation *you* make, not something the code can verify — `complete()`
-only checks that the flag was set. What you are attesting differs by transport:
+  Region, project and credentials are read by the SDK from the same environment
+  the provider's own tooling uses (`AWS_REGION`, `AWS_PROFILE`, and so on), so
+  refereekit never handles them. `REFEREEKIT_MODEL` defaults per deployment,
+  since each names the same model differently.
 
-| Transport | Data processor | What `=1` asserts |
+**What the attestation means.** `REFEREEKIT_ZERO_RETENTION=1` is an attestation
+*you* make, not something the code can verify — `complete()` only checks that
+the flag was set. It is about the account behind the client, so what you are
+asserting depends on where that client points:
+
+| Deployment | Data processor | What `=1` asserts |
 |---|---|---|
 | `anthropic` | Anthropic | Your organization has a zero-data-retention arrangement. |
 | `bedrock` | AWS | Your AWS account has no model-invocation logging configured. |
+| `vertex` | Google Cloud | Your project's logging and retention settings permit it. |
 
-On `bedrock`, Anthropic's retention terms do not govern the request at all, so
-this is the practical route when a first-party ZDR arrangement is not available.
-Credentials come from the usual AWS chain and are never read by refereekit; an
-SSO-based profile additionally needs `pip install "botocore[crt]"`.
+Only `anthropic` needs no further setup, which is why it is the default. On the
+cloud deployments the provider rather than Anthropic is the data processor, so
+Anthropic's retention terms do not govern the request — the practical route when
+a first-party zero-data-retention arrangement is not available. An SSO-based AWS
+profile additionally needs `pip install "botocore[crt]"`.
+
+Adding a deployment is one entry in `DEPLOYMENTS` in `refereekit/llm.py`: a
+client factory and a default model id. No new class, and no change here.
 
 **Commands:**
     # Generate a referee report

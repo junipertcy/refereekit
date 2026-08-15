@@ -1,5 +1,8 @@
 import pytest
-from refereekit.llm import complete, FakeBackend, RetentionError, BedrockBackend
+from refereekit.llm import (complete, FakeBackend, RetentionError,
+                           AnthropicBackend, DEPLOYMENTS, UnknownDeployment,
+                           DeploymentError,
+                           client_for, default_model)
 
 
 def test_zero_retention_backend_returns_text():
@@ -27,22 +30,52 @@ def test_missing_zero_retention_attr_fails_closed():
         complete("prompt", backend=NoAttrBackend(), manuscript_ok=True)
 
 
-def test_bedrock_backend_without_attestation_fails_closed():
-    """Bedrock retention depends on the account, so it must be attested per run.
+def test_backend_accepts_an_injected_client():
+    """The SDK speaks the same messages API to every deployment it supports, so
+    which deployment is a client, not a class. Injection is also what lets this
+    be tested without a network."""
+    sentinel = object()
+    b = AnthropicBackend(model="m", zero_retention=True, client=sentinel)
+    assert b.client is sentinel
 
-    Whether prompts are retained is a property of the AWS account (model
-    invocation logging on or off), not of the transport. A backend that hard-codes
-    the attestation cannot express "I have not checked", which is the state that
-    must refuse to send.
-    """
-    b = BedrockBackend(model="anthropic.claude-opus-5", region="us-east-1",
-                       zero_retention=False)
+
+def test_backend_without_attestation_fails_closed():
+    """Retention is a property of the account behind the client, so it must be
+    stated per run. A backend that cannot express "not checked" cannot refuse."""
+    b = AnthropicBackend(model="m", zero_retention=False, client=object())
     with pytest.raises(RetentionError):
         complete("manuscript text", backend=b, manuscript_ok=True)
 
 
-def test_bedrock_backend_attested_passes_the_gate():
-    """An attested backend clears the gate; the send itself is not exercised."""
-    b = BedrockBackend(model="anthropic.claude-opus-5", region="us-east-1",
-                       zero_retention=True)
-    assert b.zero_retention is True
+def test_client_for_builds_the_sdk_class_for_a_deployment(monkeypatch):
+    """Deployment config is the SDK's job, not refereekit's: Bedrock reads
+    AWS_REGION itself, exactly as the AWS tooling around it does."""
+    import anthropic
+    assert isinstance(client_for("anthropic"), anthropic.Anthropic)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    assert isinstance(client_for("bedrock"), anthropic.AnthropicBedrockMantle)
+
+
+def test_an_unconfigured_deployment_reports_cleanly(monkeypatch):
+    """The SDK raises AnthropicError, which is not a ValueError, so it would
+    escape the CLI's handlers and print a traceback. It is re-raised as a
+    DeploymentError -- a ValueError -- with the SDK's own guidance kept."""
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    with pytest.raises(DeploymentError, match="AWS_REGION"):
+        client_for("bedrock")
+
+
+def test_every_registered_deployment_has_a_default_model():
+    """Deployments name models differently, so one default cannot serve all."""
+    assert "vertex" in DEPLOYMENTS
+    for name in DEPLOYMENTS:
+        assert default_model(name)
+
+
+def test_an_unknown_deployment_raises_its_own_error():
+    """Distinct from ValueError: the SDK raises that for a misconfigured but
+    real deployment, and 'you typed it wrong' must not look like 'your region
+    is unset'."""
+    with pytest.raises(UnknownDeployment, match="bedrok"):
+        client_for("bedrok")
