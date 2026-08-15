@@ -77,8 +77,15 @@ Generate referee reports and editor letters using a verified claim pool.
 
   Region, project and credentials are read by the SDK from the same environment
   the provider's own tooling uses (`AWS_REGION`, `AWS_PROFILE`, and so on), so
-  refereekit never handles them. `REFEREEKIT_MODEL` defaults per deployment,
-  since each names the same model differently.
+  refereekit never handles them.
+
+  `REFEREEKIT_MODEL` defaults per deployment, since each names the same model
+  differently — but only where that id has actually been run against that
+  deployment. A deployment with no confirmed default refuses and names
+  `REFEREEKIT_MODEL` rather than shipping a plausible guess: a fabricated id
+  looks authoritative, gets copied into scripts, and fails at the provider with
+  an error naming the model instead of the mistake. `vertex` is in that state
+  today — the client is real SDK code, the model id has never been confirmed.
 
 **What the attestation means.** `REFEREEKIT_ZERO_RETENTION=1` is an attestation
 *you* make, not something the code can verify — `complete()` only checks that
@@ -89,7 +96,7 @@ asserting depends on where that client points:
 |---|---|---|
 | `anthropic` | Anthropic | Your organization has a zero-data-retention arrangement. |
 | `bedrock` | AWS | Your AWS account has no model-invocation logging configured. |
-| `vertex` | Google Cloud | Your project's logging and retention settings permit it. |
+| `vertex` | Google Cloud | Your project's logging and retention settings permit it. (No confirmed default model — set `REFEREEKIT_MODEL`.) |
 
 Only `anthropic` needs no further setup, which is why it is the default. On the
 cloud deployments the provider rather than Anthropic is the data processor, so
@@ -379,6 +386,14 @@ is the floor at which a match stops being accidental.
 ## Extraction limits
 
 - **Figures:** Reliably extracted from caption lines (handles "FIG." and "Figure" prefixes).
+- **Equation anchors:** An equation anchor verifies only inside the contiguous
+  run of extracted ids beginning at 1. Extraction yields real labels and noise
+  indiscriminately — the test fixture gives twenty numeric ids of which seven are
+  labels — and a PASS is what a referee relies on when citing, so it is confined
+  to the range extraction can vouch for. An anchor above the run FAILs rather
+  than FLAGs, because a FLAG would enter the claim pool and stay available to the
+  draft. Section-numbered labels ("2.1") are outside this rule and keep prior
+  behaviour.
 - **Equation numbers:** Best-effort extraction via right-margin geometry. Equation **bodies are not reconstructed** — PDF math rendering is lossy (bitmaps/glyphs, not LaTeX); source is unavailable post-compile. Noisy IDs remain possible on papers with complex multi-column layouts.
 - **Sections:** Best-effort heading detection. Papers with non-standard heading styles (e.g., no caps/roman numerals in the text layer) may surface few or no sections.
 - **Most reliable path:** Quote/page verification remains the robust anchor for review workflows.

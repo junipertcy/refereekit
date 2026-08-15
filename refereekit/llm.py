@@ -41,6 +41,13 @@ def complete(
 # a factory and the model id that deployment uses, because the same model is
 # named differently on each and one default cannot serve all of them.
 #
+# "model" is None when no default has been run against that deployment. A
+# fabricated default is worse than none: it looks authoritative, gets copied
+# into scripts and documentation, and fails at the provider with an error that
+# names the model rather than the mistake. None makes refereekit ask for the id
+# instead of guessing at one, and there is no third state for the next entry to
+# fall into.
+#
 # Nothing here is privileged: the direct API is the default only because it is
 # the one a referee with an API key already has.
 DEPLOYMENTS: dict[str, dict] = {
@@ -56,7 +63,9 @@ DEPLOYMENTS: dict[str, dict] = {
     },
     "vertex": {
         "client": lambda: _sdk().AnthropicVertex(),
-        "model": "claude-opus-4-8@20260115",
+        # Unconfirmed: the client is real SDK code, but no model id here has
+        # been run against Vertex, so refereekit does not name one.
+        "model": None,
     },
 }
 
@@ -95,7 +104,18 @@ def _entry(name: str) -> dict:
 
 
 def default_model(name: str) -> str:
-    return _entry(name)["model"]
+    """The model id this deployment is known to serve.
+
+    Raises when the deployment has no confirmed default, rather than returning a
+    plausible guess, and names the setting that supplies one.
+    """
+    model = _entry(name)["model"]
+    if model is None:
+        raise DeploymentError(
+            f"deployment {name!r} has no confirmed default model; "
+            f"set REFEREEKIT_MODEL to the id you want to use"
+        )
+    return model
 
 
 def client_for(name: str):

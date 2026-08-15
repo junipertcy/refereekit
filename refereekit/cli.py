@@ -209,10 +209,16 @@ def main(argv=None) -> int:
             # while nothing has been sent anywhere.
             spec = load_spec(args.spec) if args.spec else None
             kwargs = {"input_fn": scripted_input(spec)} if spec else {}
-            venue = args.venue or (spec.venue if spec else None)
+            sdir = Path(args.session)
+            # A session created by or-fetch already records its venue, so a
+            # review run against it honours that even when --venue is not
+            # repeated on the command line. Without this fallback the documented
+            # OpenReview flow sends the manuscript whenever the flag is
+            # forgotten, which the venue-gate coverage test caught.
+            venue = (args.venue or (spec.venue if spec else None)
+                     or _session_venue(Session(sdir)))
             # Before the PDF is opened and before a backend exists.
             assert_llm_permitted(venue)
-            sdir = Path(args.session)
             db = args.db or str(sdir / "memory.db")
             if venue:
                 sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists

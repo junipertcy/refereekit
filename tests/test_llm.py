@@ -1,7 +1,7 @@
 import pytest
 from refereekit.llm import (complete, FakeBackend, RetentionError,
                            AnthropicBackend, DEPLOYMENTS, UnknownDeployment,
-                           DeploymentError,
+                           DeploymentError, default_model,
                            client_for, default_model)
 
 
@@ -66,16 +66,38 @@ def test_an_unconfigured_deployment_reports_cleanly(monkeypatch):
         client_for("bedrock")
 
 
-def test_every_registered_deployment_has_a_default_model():
-    """Deployments name models differently, so one default cannot serve all."""
-    assert "vertex" in DEPLOYMENTS
-    for name in DEPLOYMENTS:
-        assert default_model(name)
-
-
 def test_an_unknown_deployment_raises_its_own_error():
     """Distinct from ValueError: the SDK raises that for a misconfigured but
     real deployment, and 'you typed it wrong' must not look like 'your region
     is unset'."""
     with pytest.raises(UnknownDeployment, match="bedrok"):
         client_for("bedrok")
+
+
+# --- deployment defaults carry provenance -----------------------------------
+
+def test_a_confirmed_default_needs_no_model_id():
+    """A deployment that has been run against its provider can name its model."""
+    assert default_model("anthropic")
+    assert default_model("bedrock")
+
+
+def test_a_deployment_without_a_confirmed_default_refuses():
+    """A fabricated default is worse than none: it looks authoritative, gets
+    copied into scripts, and fails at the provider with an error naming the
+    model rather than the mistake."""
+    with pytest.raises(DeploymentError, match="REFEREEKIT_MODEL"):
+        default_model("vertex")
+
+
+def test_every_deployment_states_whether_its_default_is_confirmed():
+    """No third state. An entry either vouches for a model id or says it has
+    none, so the next deployment added cannot quietly carry a guess."""
+    for name, entry in DEPLOYMENTS.items():
+        assert "model" in entry, f"{name} does not state a model"
+        assert entry["model"] is None or isinstance(entry["model"], str)
+
+
+def test_no_deployment_ships_a_model_id_that_was_never_run():
+    """Pins the specific defect: claude-opus-4-8@20260115 was invented."""
+    assert DEPLOYMENTS["vertex"]["model"] is None

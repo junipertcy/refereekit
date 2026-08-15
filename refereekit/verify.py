@@ -29,6 +29,26 @@ def _nearest_line(text: str, needle: str) -> str | None:
             if len(best) > _NEAREST_MAX_CHARS else best)
 
 
+def _vouched_run(doc: Document) -> int:
+    """Highest equation number extraction can vouch for.
+
+    Equation ids come from right-margin geometry, which yields real labels and
+    noise indiscriminately: the sample paper here gives 1..7 alongside 18, 500
+    and eleven others. Papers number equations from 1, so the unbroken run
+    1,2,3,... that were all extracted bounds the range where PASS means
+    something.
+
+    Returns 0 when (1) itself was not extracted. Anchoring on the lowest id
+    present instead would let a single low noise value become the floor and drag
+    a false run up behind it; refusing everything is the safe direction.
+    """
+    ids = {int(e.id) for e in doc.equations if e.id.isdigit()}
+    top = 0
+    while top + 1 in ids:
+        top += 1
+    return top
+
+
 def verify(claim: Claim, doc: Document) -> Verdict:
     if claim.kind in ("quote", "page"):
         # The page is checked first so that FLAG can carry a guarantee: the
@@ -57,8 +77,23 @@ def verify(claim: Claim, doc: Document) -> Verdict:
                                    f"nearest line is: {near!r}")
         return Verdict("FAIL", f"not found on page {page_no}")
     if claim.kind == "equation":
-        if any(e.id == claim.anchor for e in doc.equations):
+        extracted = any(e.id == claim.anchor for e in doc.equations)
+        if not claim.anchor.isdigit():
+            # Section-numbered labels ("2.1") are outside the run rule, which is
+            # numeric. Existing behaviour, kept deliberately and documented as a
+            # residual rather than changed silently.
+            if extracted:
+                return Verdict("PASS", f"equation ({claim.anchor}) exists")
+            return Verdict("FAIL", f"equation ({claim.anchor}) not found")
+        top = _vouched_run(doc)
+        if 1 <= int(claim.anchor) <= top:
             return Verdict("PASS", f"equation ({claim.anchor}) exists")
+        if extracted:
+            # It was extracted, so "not found" would be a lie; it simply sits
+            # where the extractor's output cannot be trusted.
+            where = f"(1-{top})" if top else "(none confirmed)"
+            return Verdict("FAIL", f"equation ({claim.anchor}) is outside the "
+                                   f"range extraction can vouch for {where}")
         return Verdict("FAIL", f"equation ({claim.anchor}) not found")
     if claim.kind == "figure":
         if any(f.id == claim.anchor for f in doc.figures):
