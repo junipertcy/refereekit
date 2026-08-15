@@ -103,3 +103,27 @@ def test_cli_review_with_venue_fresh_session(tmp_path, real_pdf_path, monkeypatc
     assert rc == 0
     assert (sess / "ours" / "report.txt").exists() and (sess / "ours" / "editor.txt").exists()
     assert (sess / "memory.db").exists()   # --venue created the store in the fresh dir
+
+
+def test_cli_review_refuses_a_prohibited_venue(tmp_path, real_pdf_path,
+                                               monkeypatch, capsys):
+    """--venue is enough to know the rule; refuse before the PDF is opened."""
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    rc = main(["review", str(real_pdf_path), "--session", str(tmp_path / "s"),
+               "--venue", "NeurIPS"])
+    assert rc == 2
+    assert "prohibits" in capsys.readouterr().err.lower()
+    assert not (tmp_path / "s" / "ours").exists()
+
+
+def test_cli_review_refuses_a_prohibited_venue_from_the_spec(tmp_path,
+                                                             real_pdf_path,
+                                                             monkeypatch, capsys):
+    """A spec that names the venue is checked the same as --venue."""
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    spec = tmp_path / "review.toml"
+    spec.write_text(SPEC.replace('venue = "PRX"', 'venue = "NeurIPS"'))
+    rc = main(["review", str(real_pdf_path), "--session", str(tmp_path / "s"),
+               "--spec", str(spec)])
+    assert rc == 2
+    assert "prohibits" in capsys.readouterr().err.lower()

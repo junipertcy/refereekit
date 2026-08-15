@@ -5,6 +5,30 @@ Standalone, harness-portable toolkit that automates a paper-review workflow.
 > **New here?** See **[QUICKSTART.md](QUICKSTART.md)** — the one-command way to review a
 > paper. This README documents every individual tool and the build phases behind them.
 
+## Venue policy
+
+Zero-retention terms are not a blanket permission. Some venues forbid sending a
+submission to any model they do not host, however well the transport behaves.
+
+`refereekit review`, `draft`, `editor` and `or-draft` refuse to run for such a
+venue, before a backend is built and before the PDF is opened. The venue comes
+from `--venue`, from the review spec, or from the session state that `or-fetch`
+already records — so the check needs nothing restated on the command line.
+
+The built-in table currently carries one entry, NeurIPS, matched against both
+the bare name and the OpenReview id (`NeurIPS.cc/2026/Conference`). Extend or
+override it with a TOML file at `REFEREEKIT_VENUE_POLICY`:
+
+    [venues]
+    "Some Journal" = { llm = false }
+    NeurIPS = { llm = true }        # if the rule ever changes
+
+**Unlisted venues are permitted.** Code cannot know every venue's policy, and
+refusing the unknown would make the tool useless for the long tail of journals.
+This mechanism makes the prohibitions you already know about impossible to
+forget; it does not discover them. Keeping the table current is the referee's
+job, as §2 of the design spec has always said.
+
 ## Confidentiality
 Confidential manuscripts and text derived from them are never committed. The only
 committable PDF is the test fixture under `tests/fixtures/`. Manuscript text is
