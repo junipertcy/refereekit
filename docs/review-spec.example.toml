@@ -1,0 +1,60 @@
+# Example review spec — copy next to a session and edit.
+#
+#     refereekit review paper.pdf --session ./work/paperA --spec ./work/paperA/review.toml
+#
+# Every gate `refereekit review` would prompt for is answered here, so the run
+# needs no terminal. Keep the spec beside its session: it is the record of what
+# you asked and what you concluded, and it is what makes a review re-runnable
+# after an ingest fix without retyping a word.
+#
+# This file is an example and carries no manuscript-derived text. A real spec
+# quotes the paper and is confidential — write it under work/, never in the repo.
+
+# Optional. Supplies --venue, so the command line does not have to repeat it.
+# Drives style recall from memory for this venue.
+venue = "PRX"
+
+# Required, and must be non-empty. Each entry is one turn of the Q&A loop.
+# Every anchor in the answer is verified against the PDF, so ask for citations:
+# an answer that cites nothing puts nothing in the claim pool for the draft.
+questions = [
+  """Precisely where does the derivation stop being exact? Identify every step
+  that is an assumption rather than an identity, and state whether the paper
+  bounds the resulting error. Cite pages and equations.""",
+
+  """List every explicit novelty claim ('for the first time', 'so far
+  unreported'), with the page each appears on, and say whether the paper
+  substantiates it in the same place.""",
+
+  """What is reported about reproducibility: code and data availability,
+  hyperparameters, and how statistical uncertainty is estimated? Cite pages.""",
+]
+
+# Required. All three keys must be present and non-empty.
+[verdict]
+# Free prose. This is the referee's own assessment, not the model's — it is an
+# input to the draft, not an output of it. Triple quotes keep it readable.
+recommend = """
+Publish after major revision.
+
+MAJOR ISSUE 1: state the approximation and its untested status in the abstract,
+not only in the discussion.
+
+MAJOR ISSUE 2: the validation and the object being validated are mismatched;
+say so plainly and probe the dominant configurations directly if possible.
+"""
+venue = "PRX"
+major_minor = "major"
+
+# Optional. Per-section length overrides; omit the table to accept defaults.
+[section_lengths]
+# intro = "short"
+# summary = "long"
+
+# Optional. The editor's questions, keyed as the form labels them.
+[editor_answers]
+a = """PARTLY. The reduction is a real and useful advance, but the central step
+is an unproven ansatz, so this is a strong baseline rather than a solved
+problem."""
+b = """NOT YET. The claims outrun the evidence in the three ways listed in my
+report. All are fixable by rewriting claims to match evidence."""

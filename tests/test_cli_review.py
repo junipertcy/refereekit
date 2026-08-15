@@ -31,6 +31,67 @@ def test_cli_review_not_zero_retention_exits_2(tmp_path, monkeypatch, capsys):
     assert rc == 2
     assert "retention" in capsys.readouterr().err.lower()
 
+SPEC = '''
+venue = "PRX"
+questions = ["Where does the derivation stop being exact?"]
+
+[verdict]
+recommend = """
+Publish after major revision.
+MAJOR ISSUE 1: the Ansatz is uncontrolled and the error is never bounded.
+"""
+venue = "PRX"
+major_minor = "major"
+
+[editor_answers]
+a = "PARTLY. The reduction is a real advance but the central step is an ansatz."
+'''
+
+
+def test_cli_review_runs_from_a_spec_with_no_typed_input(tmp_path, real_pdf_path,
+                                                         monkeypatch):
+    """A spec drives every gate, so the run needs no terminal and no input hack.
+
+    The other tests here patch run_review.__kwdefaults__ to smuggle answers in.
+    That hack exists only because the CLI had no way to script a review; --spec
+    is that way, so this test uses none.
+    """
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Answer about the paper. See p. 1.")
+    spec = tmp_path / "review.toml"
+    spec.write_text(SPEC)
+    sess = tmp_path / "s"
+    rc = main(["review", str(real_pdf_path), "--session", str(sess),
+               "--spec", str(spec)])
+    assert rc == 0
+    assert (sess / "ours" / "report.txt").exists()
+    assert (sess / "ours" / "editor.txt").exists()
+
+
+def test_cli_review_spec_supplies_the_venue(tmp_path, real_pdf_path, monkeypatch):
+    """A spec that names its venue does not also need --venue on the command line."""
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Answer about the paper. See p. 1.")
+    spec = tmp_path / "review.toml"
+    spec.write_text(SPEC)
+    sess = tmp_path / "s"
+    rc = main(["review", str(real_pdf_path), "--session", str(sess),
+               "--spec", str(spec)])
+    assert rc == 0
+    assert (sess / "memory.db").exists()   # only created when a venue is in play
+
+
+def test_cli_review_bad_spec_exits_2(tmp_path, real_pdf_path, monkeypatch, capsys):
+    """A spec missing its verdict must fail before the manuscript is sent."""
+    monkeypatch.setenv("REFEREEKIT_FAKE", "1")
+    spec = tmp_path / "review.toml"
+    spec.write_text('questions = ["q"]\n')
+    rc = main(["review", str(real_pdf_path), "--session", str(tmp_path / "s"),
+               "--spec", str(spec)])
+    assert rc == 2
+    assert "verdict" in capsys.readouterr().err.lower()
+
+
 def test_cli_review_with_venue_fresh_session(tmp_path, real_pdf_path, monkeypatch):
     monkeypatch.setenv("REFEREEKIT_FAKE", "1")
     monkeypatch.setenv("REFEREEKIT_FAKE_TEXT", "Answer about the paper. See p. 1.")

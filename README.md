@@ -129,7 +129,35 @@ with a zero-retention LLM for real reviews.
 7. **Editor letter** — generate editor response letter with optional editor-question answers
 
 **Command:**
-    refereekit review <pdf> --session <dir> [--venue <venue>]
+    refereekit review <pdf> --session <dir> [--venue <venue>] [--spec <file>]
+
+### Review specs
+
+The gates above prompt for typed answers. A real verdict is considered prose
+drafted over days, and the questions worth asking a manuscript are equally
+deliberate — neither is something you compose at a `verdict (recommend)>`
+prompt. `--spec` supplies all of them from a TOML file, so a review runs with no
+terminal interaction:
+
+    refereekit review paper.pdf --session ./work/paperA --spec ./work/paperA/review.toml
+
+See **[docs/review-spec.example.toml](docs/review-spec.example.toml)** for the
+full format. In brief: `questions` (required, non-empty), a `[verdict]` table
+(`recommend`, `venue`, `major_minor`, all required), and optional
+`[section_lengths]` and `[editor_answers]` tables. A top-level `venue` supplies
+`--venue`.
+
+TOML rather than JSON or YAML: `tomllib` is in the standard library from 3.11,
+and triple-quoted strings keep a thousand-word verdict readable. JSON would put
+it on one escaped line.
+
+The spec is parsed before the backend is built and before the PDF is opened, so
+a spec that cannot drive the run fails while nothing has been sent anywhere.
+
+Keep the spec beside its session. It is the record of what you asked and what
+you concluded, and it makes a review re-runnable after an ingest fix without
+retyping a word. A real spec quotes the manuscript, so it is confidential —
+write it under `work/`, never in the repo.
 
 **Example (offline, no network):**
     export REFEREEKIT_FAKE=1

@@ -10,6 +10,7 @@ from . import render
 from .memory import SQLiteMemoryStore, Note
 from .guard import ManuscriptLeakError
 from .agent import run_review
+from .spec import load_spec, scripted_input
 
 # Default style guide path (repo root / style / STYLE.md)
 _DEFAULT_STYLE = Path(__file__).resolve().parent.parent / "style" / "STYLE.md"
@@ -94,6 +95,8 @@ def main(argv=None) -> int:
     prv.add_argument("pdf")
     prv.add_argument("--session", required=True)
     prv.add_argument("--venue")
+    prv.add_argument("--spec", help="TOML review spec; drives every gate "
+                                    "without typed input")
     prv.add_argument("--db")
     prv.add_argument("--style", default=None)
     pof = sub.add_parser("or-fetch")
@@ -194,16 +197,23 @@ def main(argv=None) -> int:
     if args.cmd == "review":
         try:
             from .llm import RetentionError
+            # Parsed first, before the backend is built and before any page of
+            # the manuscript is read: a spec that cannot drive the run must fail
+            # while nothing has been sent anywhere.
+            spec = load_spec(args.spec) if args.spec else None
+            kwargs = {"input_fn": scripted_input(spec)} if spec else {}
+            venue = args.venue or (spec.venue if spec else None)
             sdir = Path(args.session)
             db = args.db or str(sdir / "memory.db")
-            if args.venue:
+            if venue:
                 sdir.mkdir(parents=True, exist_ok=True)  # ensure db parent exists
-            mem = SQLiteMemoryStore(db) if args.venue else None
+            mem = SQLiteMemoryStore(db) if venue else None
             # Style path: --style arg > REFEREEKIT_STYLE env > default (same as draft/editor).
             # Use the location-anchored default so `review` works from any cwd, not just repo root.
             style_path = args.style or os.environ.get("REFEREEKIT_STYLE") or str(_DEFAULT_STYLE)
             res = run_review(args.pdf, backend=_backend(), session_dir=sdir,
-                           style_path=style_path, memory=mem, venue=args.venue)
+                           style_path=style_path, memory=mem, venue=venue,
+                           **kwargs)
         except (FileNotFoundError, ValueError, RetentionError, ManuscriptLeakError, sqlite3.OperationalError, pymupdf.FileNotFoundError, EOFError) as e:
             print(f"review failed: {e}", file=sys.stderr)
             return 2
