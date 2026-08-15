@@ -1,19 +1,36 @@
 # Confidential manuscripts under review, and text derived from them, must never
-# enter the repository. Patterns are root-anchored so the test fixture under
-# tests/fixtures/ is NOT caught.
+# enter the repository.
+#
+# Deny everywhere, then allow this repository's own files by name. These
+# patterns were once anchored to the root, which protected the test fixtures by
+# accident of position and left anything one directory down committable by
+# `git add -A`: a session directory, docs/, a scratch folder. An allow-list of
+# three files is auditable; a deny-list of "wherever a manuscript might land"
+# cannot be. tests/test_gitignore.py pins both halves.
 
-# Manuscript PDFs (live in repo root)
-/*.pdf
-# Extracted manuscript text
-/*_raw.txt
-/*_plain.txt
-# Per-review outputs (manuscript-derived)
-/review_draft_*.txt
-/editor_response_*.txt
-/index.html
+# Manuscript PDFs, anywhere. The suite's own inputs are the only exception.
+*.pdf
+!tests/fixtures/*.pdf
+
+# Text extracted from, or derived from, a manuscript.
+*_raw.txt
+*_plain.txt
+review_draft_*.txt
+editor_response_*.txt
+
+# Rendered Q&A pages. --session takes any path, so a session is not always
+# under work/; diagrams/index.html is documentation that shares the name.
+index.html
+!diagrams/index.html
 
 # Env / caches / vendored study code
 .venv/
+# Credentials. .env holds a real OpenReview password; only .env.template,
+# which carries names and no values, is committed. Listed before the .venv/
+# glob would suggest otherwise: .venv/ does not match .env.
+.env
+.env.*
+!.env.template
 __pycache__/
 *.pyc
 # Locally-cloned reference code studied during a review (never committed)
