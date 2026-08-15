@@ -34,8 +34,14 @@ _BUILTIN: dict[str, bool] = {
 }
 
 
-class VenuePolicyError(RuntimeError):
-    """Raised when a venue forbids the LLM path the command would take."""
+class VenuePolicyError(ValueError):
+    """Raised when a venue forbids the LLM path the command would take.
+
+    A ValueError, like ManuscriptLeakError, so that every command's existing
+    handler reports it as a clean error. Requiring each call site to add it to
+    an except tuple is how or-responses shipped ungated: the gate was there and
+    the refusal escaped as a traceback.
+    """
 
 
 def _normalize(venue: str) -> str:

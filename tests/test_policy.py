@@ -63,3 +63,9 @@ def test_the_error_says_what_to_do():
         assert_llm_permitted("NeurIPS")
     msg = str(e.value)
     assert "REFEREEKIT_VENUE_POLICY" in msg
+
+
+def test_the_error_is_a_valueerror():
+    """Every command already handles ValueError, so a new manuscript-sending
+    command inherits the refusal instead of having to opt into it."""
+    assert issubclass(VenuePolicyError, ValueError)

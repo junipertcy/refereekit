@@ -398,6 +398,10 @@ def main(argv=None) -> int:
         from .openreview import responses as orresponses
         try:
             s = Session(Path(args.session))
+            # Author responses quote and characterise the paper, so analyze()
+            # sends them with manuscript_ok=True. That puts this command on the
+            # manuscript path and under the same venue rule as or-draft.
+            assert_llm_permitted(_session_venue(s))
             # A typo in --session is the usual cause, and it needs its own
             # message. Reported before reading theirs/, and reached as a plain
             # path rather than through the theirs_dir property, because that
