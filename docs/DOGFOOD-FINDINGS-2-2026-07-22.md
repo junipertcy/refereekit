@@ -64,3 +64,27 @@ only PASS equation ids within the detected contiguous run (e.g. 1..max-contiguou
 - **Still open (deferred):** verbatim quote matching (paraphrase/nearest-line);
   contiguous-run equation filtering (chose the conservative drop-"0" only);
   report/editor DRY helper; diagram refresh.
+
+## Resolved by typography folding (2026-08-15)
+
+- **Verbatim quote matching:** RESOLVED, and it was a correctness bug rather
+  than the usability nuance both dogfood passes recorded. `verify` compared raw
+  codepoints, so a *correctly copied* quotation failed whenever extraction had
+  handed back a ligature, a wide dash, a Unicode minus, a curly quote, a soft
+  hyphen, or a word broken across a line. On the real fixture — 51 ligatures, 50
+  dashes, 128 line-break hyphenations — `"a finite set of nodes"` returned FAIL.
+  Comparison now folds typography on both sides via `refereekit/textnorm.py`.
+  Folding only: every rule maps two spellings of the same characters onto one,
+  so a genuine misquotation still FAILs, and a hyphen inside a line stays
+  content (`58%` does not match `5-8%`).
+- **Nearest line on FAIL:** RESOLVED. A failed quotation now reports the closest
+  line on the page, so a slip in transcription is distinguishable from words
+  that are absent. Diagnostic only; it never changes the verdict.
+- **Leak guard had the mirror defect:** found while fixing the above. The same
+  missing fold made `assert_no_manuscript` too *lax*: a short verbatim fragment
+  retyped without the ligature was allowed into memory, defeating the
+  fail-closed guarantee for exactly the text a referee is most likely to write.
+  Now folds identically. The two are one bug with opposite signs, which is why
+  the normalization is shared rather than duplicated.
+- **Still open (deferred):** contiguous-run equation filtering (noise ids above
+  the real range can still PASS); report/editor DRY helper; diagram refresh.

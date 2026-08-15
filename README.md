@@ -383,6 +383,26 @@ is the floor at which a match stops being accidental.
 - **Sections:** Best-effort heading detection. Papers with non-standard heading styles (e.g., no caps/roman numerals in the text layer) may surface few or no sections.
 - **Most reliable path:** Quote/page verification remains the robust anchor for review workflows.
 
+### Typography folding
+
+A quotation is compared after folding the typography a PDF adds, so a correctly
+copied sentence verifies whatever the extractor handed back: the fi ligature,
+dashes of any width, the Unicode minus, curly quotation marks, soft hyphens, and
+words the typesetter broke across a line (both readings are searched, so
+`combina-torial` and `well-known` both work). The real fixture contains 51
+ligatures, 50 dashes of three kinds, and 128 line breaks inside words — before
+this, `"a finite set of nodes"` was reported FAIL.
+
+**This is folding, not fuzzy matching.** Each rule maps two spellings of the
+same characters onto one; none widens what counts as a match, so PASS still
+means the words are there. A hyphen *inside* a line stays content — a quotation
+of `58%` does not match a paper's `5-8%`. On FAIL, the nearest line on the page
+is reported as a diagnostic, which never changes the verdict.
+
+The leak guard folds identically (`refereekit/textnorm.py` is shared). It had
+the mirror of the same defect: a manuscript fragment retyped without the
+ligature was *allowed* into memory.
+
 ## Test
     .venv/bin/pytest -v
 
