@@ -78,8 +78,8 @@ Exit 2, and no row is written.
 | `error: no received notes in theirs/; nothing to analyze` | `or-responses` before any reply exists — `theirs/` is empty | run `or-fetch --number` again once a reply has been posted |
 | `could not confirm these are not your own review, so they were not stored in theirs/:`<br>`  <note-id>-<tcdate>.txt`<br>`check them by hand on forum <forum>` | the lookup for your own anonymous reviewer groups at this submission returned nothing, so refereekit cannot tell your review from a co-referee's and holds every signed-by-a-group `Official_Review` back rather than guess | nothing to fix in refereekit — open the named forum and check each note by hand; the rest of the discussion still arrives |
 
-The first ten rows exit 2. The last is not an error: it prints to stdout,
-and `or-fetch` still exits 0.
+Every row above except the last exits 2, with the message on stderr. The
+last is not an error: it prints to stdout, and `or-fetch` still exits 0.
 
 ## Verification surprises
 
