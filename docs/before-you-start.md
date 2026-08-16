@@ -17,8 +17,8 @@ must keep everything relating to the review process confidential. … Do not
 talk about or share submissions with anyone or any LLMs." Zero-retention
 API terms create no exception to that, because the prohibition is on
 sharing at all rather than on retention: a model that keeps nothing has
-still been shared with. There is no configuration that makes this
-permitted. Use the venue's own review interface.
+still been shared with. No retention setting and no API configuration
+change that. Use the venue's own review interface.
 
 **ICLR 2026 permits it with disclosure.** "The Use of Large Language Models
 (LLMs)", in the ICLR 2026 Reviewer Guide at
@@ -72,11 +72,46 @@ review failed: NeurIPS.cc/2026/Conference prohibits sending the submission to an
 Exit code 2, nothing sent, and no `work/neurips` directory created at all,
 because the check runs before `review` opens the PDF or makes the session.
 
-The message names its own override, because the table ships with the
-package and a venue's policy changes without a release.
-`REFEREEKIT_VENUE_POLICY` points at a TOML file that extends or overrides
-the built-in table, and three lines are a complete one
-(`refereekit/policy.py:20-22`):
+There is an override, because the table ships with the package and a
+venue's policy changes without a release: `REFEREEKIT_VENUE_POLICY` points
+at a TOML file that extends or overrides the built-in table. Copy the key
+out of the message above, though, and it will not work. As of this version
+the message names the wrong key.
+
+A venue is looked up by walking the table in order and returning on the
+first key contained in the normalised venue string, and the built-in
+`neurips` is always first (`refereekit/policy.py:52-61,64-72`). Since
+`neurips` is contained in `neuripscc2026conference`, that first entry
+answers for the whole id, and an entry keyed on the full id — the exact
+line the refusal prints — sits behind it and is never reached. Written that
+way, the command still refuses.
+
+What works is keying the override on the bare name, so it replaces the
+built-in entry instead of queueing behind it. Two lines, in a file of your
+own under `work/`:
+
+```toml
+[venues]
+NeurIPS = { llm = true }
+```
+
+```bash
+REFEREEKIT_VENUE_POLICY=work/pol.toml refereekit review tests/fixtures/real_paper.pdf --session work/neurips --venue NeurIPS.cc/2026/Conference
+```
+
+The gate is lifted and the review runs. Its last line is the ordinary one
+(this run used the offline backend, so it needed no key):
+
+```text
+review complete: work/neurips/ours/report.txt, work/neurips/ours/editor.txt (2 flag(s))
+```
+
+The same trap applies to any venue the built-in table already matches: an
+override only replaces an entry when its key normalises to that entry's
+key. Adding a venue refereekit has never heard of is unaffected, since no
+built-in key stands in front of it. The file's own example does one of
+each — the bare `NeurIPS` key, which lands on the built-in entry, and a
+journal that is new (`refereekit/policy.py:20-22`):
 
 ```toml
 [venues]
@@ -146,17 +181,18 @@ established, with the reason `not in verified pool`
 (`refereekit/drafts.py:98-124`). Read that asymmetry carefully, because it
 inverts the reassurance you would take from a clean run: a draft with no
 pool and no flags is a draft that cited nothing, not a draft that was
-checked. Flags are the only evidence of checking there is, and a count of
-zero means either that every citation was earned or that there were no
-citations to earn.
+checked. A flag count of zero is two different outcomes wearing the same
+face — every citation earned, or no citations to earn — and the count alone
+cannot tell you which. What tells them apart is the claim pool the session
+recorded, which you can read and re-check yourself.
 
 That last one is the honest framing of the tool and the strongest argument
 for how it is built. What refereekit hands you is not a review. It is a
 pool of claims you verified yourself, prose built from that pool, and a
 mark wherever the prose stepped outside it — which is worth exactly as much
-as the reading you did to fill the pool. [What verification
-means](concepts/verification.md) is what a `PASS` in that pool actually
-promises, and it is narrower than you will assume.
+as the reading you did to fill the pool. What a `PASS` in that pool
+actually promises is narrower than you will assume, and [What verification
+means](concepts/verification.md) says exactly how narrow.
 
 ## Next
 
