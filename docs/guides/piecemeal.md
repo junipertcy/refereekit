@@ -70,11 +70,13 @@ parsing the printed line; the full table, shared by every command, is in
 `quote` and `page` — the same check either way, since `--anchor` is a
 page number for both — plus `equation` and `figure`. `figure` checks
 only that the anchor was extracted at all; `equation` checks the same
-for a non-numeric id such as `2.1`, but a plain number must also fall
-inside the contiguous run of extracted numbers starting at 1 —
-extraction picks up page-margin noise alongside real labels, so a
-number found outside that run still FAILs, not PASSes, even though it
-really was extracted:
+for a non-numeric id such as `2.1` — a case you only reach by typing
+the claim yourself, since `ingest` extracts equation ids of one to
+three digits and nothing else (`refereekit/ingest.py:5,20`) — but a
+plain number must also fall inside the contiguous run of extracted
+numbers starting at 1 — extraction picks up page-margin noise
+alongside real labels, so a number found outside that run still FAILs,
+not PASSes, even though it really was extracted:
 
 ```bash
 refereekit verify --session work/ref --kind equation --anchor 18 --text ""

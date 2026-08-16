@@ -124,6 +124,21 @@ of the three needs a key, an account, or a network connection to
 reproduce — try each one now, against [the tutorial](../tutorial.md)'s
 own session, before you ever run this for real.
 
+Unset `REFEREEKIT_FAKE` first, though, if the tutorial exported it: the fake
+backend is marked zero-retention and never builds an SDK client, so with it
+still set the first two commands below draft successfully instead of
+refusing.
+
+```bash
+unset REFEREEKIT_FAKE      # bash, zsh
+set -e REFEREEKIT_FAKE     # fish
+```
+
+The retention refusal also needs the `llm` extra installed, because
+building the SDK client comes first: without the SDK the same command stops
+earlier, on `error: cannot use deployment 'anthropic': No module named
+'anthropic'`.
+
 If `REFEREEKIT_ZERO_RETENTION` was never exported, the manuscript path
 refuses regardless of which deployment or account you have configured —
 this one always lands before anything is sent, under `review`, `draft`,
@@ -190,7 +205,9 @@ count — it tells you the drafts contain a citation the checker could not
 stand behind, not which one. To find out, run `refereekit draft --session
 work/<name>`: it redrafts `ours/report.txt` from the same claim pool and
 prints one `FLAG <kind> (<anchor>): <reason>` line per flag, instead of
-just the total. Against the tutorial's own session:
+just the total. Against the tutorial's own session, with [the
+tutorial](../tutorial.md#1-set-up-the-fake-backend)'s `REFEREEKIT_FAKE`
+exported again if you unset it for the refusals above:
 
 ```bash
 refereekit draft --session work/tutorial

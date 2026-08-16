@@ -9,7 +9,15 @@ it.
 Every prompt refereekit sends to a model passes through one function:
 `complete()`, in `refereekit/llm.py:29-36`. Before it calls the backend it
 checks one thing — the backend's `zero_retention` attribute — and refuses
-unless that attribute is exactly `True`:
+unless that attribute is exactly `True`. Reproduce it with `REFEREEKIT_FAKE`
+unset: the fake backend is marked zero-retention and never builds an SDK
+client, so with it still exported from [the tutorial](../tutorial.md) the
+command below drafts instead of refusing.
+
+```bash
+unset REFEREEKIT_FAKE      # bash, zsh
+set -e REFEREEKIT_FAKE     # fish
+```
 
 ```bash
 refereekit draft --session work/tutorial
@@ -47,7 +55,7 @@ differs:
 
 | Deployment | What `REFEREEKIT_ZERO_RETENTION=1` asserts |
 |---|---|
-| `anthropic` | Your organization has a zero-data-retention arrangement. |
+| `anthropic` | Your organisation has a zero-data-retention arrangement. |
 | `bedrock` | Your AWS account has no model-invocation logging. |
 | `vertex` | Your project's logging and retention settings permit it. |
 
@@ -63,25 +71,26 @@ and configured.
 ## The venue gate
 
 Some venues forbid sending a submission to any outside model at all, and
-zero-retention terms do not create an exception — the rule is about
-disclosure, not about how well the transport behaves. refereekit checks
-this before it checks the attestation above: `assert_llm_permitted` runs
+zero-retention terms do not create an exception — the rule is about sharing
+the submission at all, not about how well the transport behaves. refereekit
+checks this before the attestation above: `assert_llm_permitted` runs
 before a backend is built, in every command that could build one —
 `draft` (`cli.py:159`), `editor` (`cli.py:175`), `review` (`cli.py:221`,
 before the PDF is even opened), `or-draft` (`cli.py:352`), and
 `or-responses` (`cli.py:410`).
 
 The venue comes from `--venue` if you passed it, otherwise from a
-`--spec` file's own venue, otherwise from whatever `or-fetch` already
-recorded in the session's `state.json` — so a session `or-fetch` built
-carries its venue's rule automatically, with nothing to restate on the
-command line. The built-in table has exactly one entry (`policy.py:32-34`),
-and the default is to permit: code cannot know every venue's policy, and
-refusing every venue it does not recognise would make refereekit useless
-for the long tail of journals (`policy.py:10-14`). This table makes the
-prohibitions you already know about impossible to forget; it does not
-discover new ones — check what your own venue actually forbids in
-[Before you start](../before-you-start.md).
+`--spec` file's own venue, otherwise from whatever the session's
+`state.json` already records — the top-level venue `or-fetch` wrote, or the
+venue inside the verdict an earlier `review` saved (`cli.py:39-47`) — so a
+session either command built carries its venue's rule automatically, with
+nothing to restate on the command line. The built-in table has exactly one
+entry (`policy.py:32-34`), and the default is to permit: code cannot know
+every venue's policy, and refusing every venue it does not recognise would
+make refereekit useless for the long tail of journals (`policy.py:10-14`).
+This table makes the prohibitions you already know about impossible to
+forget; it does not discover new ones — check what your own venue actually
+forbids in [Before you start](../before-you-start.md).
 
 ```bash
 refereekit review tests/fixtures/real_paper.pdf --session work/neurips --venue NeurIPS.cc/2026/Conference
@@ -94,9 +103,9 @@ review failed: NeurIPS.cc/2026/Conference prohibits sending the submission to an
 
 Also exit code 2, and also before anything is opened: this refusal creates
 no `work/neurips` session directory at all, because `assert_llm_permitted`
-raises before `review` creates one. The message names its own override,
-exactly as shown: point `REFEREEKIT_VENUE_POLICY` at a TOML file that sets
-`llm = true` for a venue the built-in table has wrong.
+raises before `review` creates one. As of this version the printed key does
+not lift the gate — key the override on the bare venue name; see [Before you
+start](../before-you-start.md#refereekit-knows-about-one-prohibition-and-cannot-discover-others).
 
 ## The leak guard fails closed
 

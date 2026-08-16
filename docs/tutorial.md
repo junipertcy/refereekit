@@ -97,7 +97,7 @@ your answers to the editor, and never sees the verdict at all. The venue
 typed here is recorded on the verdict, and that is late — `review` has
 already decided whether to open a venue memory by then, so pass `--venue` on
 the command line if you want one — but a later `draft` or `editor` run on
-this session does fall back to it. See [The session
+this session does fall back to it for the venue gate. See [The session
 directory](reference/session.md).
 
 **The section-length gate.** `section lengths (name=len, comma-sep;

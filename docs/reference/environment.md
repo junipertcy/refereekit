@@ -42,16 +42,24 @@ provider's own tooling uses.
 | Deployment | Variables |
 |---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` |
-| `bedrock` | `AWS_REGION`, `AWS_PROFILE`, and the rest of the AWS credential chain (`~/.aws/config`, SSO) |
+| `bedrock` | `AWS_REGION` or `AWS_DEFAULT_REGION`, `AWS_PROFILE`, and the rest of the AWS credential chain (`~/.aws/config`, SSO) |
 | `vertex` | `CLOUD_ML_REGION`, `ANTHROPIC_VERTEX_PROJECT_ID`, and Google Application Default Credentials (`gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS`) — *documented from the SDK's code, not from a run* |
 
 The `vertex` row is documented from the SDK's own source
 (`anthropic/lib/vertex/_client.py` in the installed package), not from a run
 against a Vertex project — the same gap as `REFEREEKIT_MODEL` above: no
-model id has been confirmed against that deployment either. The SDK also
-reads `ANTHROPIC_BEDROCK_BASE_URL`, `AWS_BEARER_TOKEN_BEDROCK`, and
-`ANTHROPIC_VERTEX_BASE_URL` for a custom endpoint or bearer-token
-authentication; most setups need neither.
+model id has been confirmed against that deployment either. The `bedrock`
+row comes from `anthropic/lib/bedrock/_mantle.py` and
+`anthropic/lib/aws/_credentials.py`, because the client refereekit registers
+for that deployment is the SDK's Bedrock Mantle client
+(`refereekit/llm.py:61`), not the `AnthropicBedrock` client in
+`anthropic/lib/bedrock/_client.py`. It signs for the `bedrock-mantle`
+service against `https://bedrock-mantle.<region>.api.aws/anthropic`, built
+from the region above. The SDK also reads
+`ANTHROPIC_BEDROCK_MANTLE_BASE_URL` and `ANTHROPIC_VERTEX_BASE_URL` for a
+custom endpoint, and `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_AWS_API_KEY`
+for bearer-token authentication in place of SigV4; most setups need none of
+them.
 
 ## Loading them
 

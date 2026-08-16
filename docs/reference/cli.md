@@ -124,8 +124,10 @@ refereekit serve --session work/<name> --port 8888
 | `--port` | no | `8888` | TCP port on `127.0.0.1`. |
 
 Serves the session directory as static files on `127.0.0.1` and runs until
-you interrupt it. It never exits 2: a session that does not exist, or one
-with no `index.html`, serves 404s rather than refusing to start —
+you interrupt it. It never exits 2, whatever it is pointed at: a session
+directory that does not exist serves 404s, and one that exists but has no
+`index.html` serves a directory listing with HTTP 200, because Python's own
+static-file server falls back to a listing rather than refusing —
 `index.html` is written only by `review`. If the port is already taken,
 `serve` tries the next one, up to 50 times, and prints whichever port it
 actually bound.
@@ -261,11 +263,13 @@ refereekit review <pdf> --session work/<name> --venue <venue> --spec <path> --db
 This is the whole pipeline in one command: ingest, summarise, an
 interactive question loop (or a scripted one, under `--spec`), the verdict
 gate, and both drafts. The venue is resolved in this order: `--venue`, then
-the spec's own `venue`, then whatever venue the session already has
-recorded from an earlier `or-fetch` into the same directory. The venue gate
-runs on that result before the PDF is opened and before a backend is
-built, so a venue that forbids outside models refuses the run before
-anything is sent anywhere. `--spec`, when given, is parsed before the gate
+the spec's own `venue`, then whatever venue the session already has on
+record — the top-level one an earlier `or-fetch` into the same directory
+wrote, or the one inside the verdict an earlier `review` saved
+(`refereekit/cli.py:39-47`). The venue gate runs on that result before the
+PDF is opened and before a backend is built, so a venue that forbids
+outside models refuses the run before anything is sent anywhere. `--spec`,
+when given, is parsed before the gate
 and before the PDF, so a spec that cannot drive the run fails before
 anything else happens.
 
@@ -334,8 +338,12 @@ already holding a different paper.
 
 ## `or-draft`
 
-*Not run while writing this page: needs an OpenReview account and a
-session already fetched with `or-fetch --number`.*
+Not run against a fetched session while writing this page: that needs an
+OpenReview account. [Reviewing on OpenReview](../guides/openreview-review.md)
+runs it offline instead, in [Drafting the form's prose
+fields](../guides/openreview-review.md#drafting-the-forms-prose-fields),
+against a review form built from a test fixture — that is where everything
+below was checked.
 
 ```bash
 refereekit or-draft --session work/<name> --length <name>=<value> --style <path> --db <path>

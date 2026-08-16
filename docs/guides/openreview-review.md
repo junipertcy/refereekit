@@ -239,13 +239,15 @@ tutorial](../tutorial.md#1-set-up-the-fake-backend) does, then:
 rm -rf work/tutorial work/or-demo
 printf 'What does the paper study?\n\nminor revision\nPRX\nminor\n\n\n' | refereekit review tests/fixtures/real_paper.pdf --session work/tutorial >/dev/null
 mkdir -p work/or-demo && cp work/tutorial/doc.json work/or-demo/
-python -c "import json; from refereekit.openreview import form as f; open('work/or-demo/form.json','w').write(f.to_json(f.parse_form(json.load(open('tests/fixtures/openreview_default_form.json')))))"
+.venv/bin/python -c "import json; from refereekit.openreview import form as f; open('work/or-demo/form.json','w').write(f.to_json(f.parse_form(json.load(open('tests/fixtures/openreview_default_form.json')))))"
 ```
 
-That `python -c` line is not a step you would ever run for a real
+That `.venv/bin/python -c` line is not a step you would ever run for a real
 submission — it converts a stored invitation into the same `form.json` a
 real `or-fetch` would write, so that the rest of this section runs with no
-account, against a form nobody submitted anything to. The
+account, against a form nobody submitted anything to. It is the one command
+on these pages spelled with the interpreter's full path, because it imports
+`refereekit` and so has to be the virtual environment's own Python. The
 fixture is OpenReview's default review form: `title`, `review`, `rating`,
 `confidence`.
 
@@ -380,7 +382,7 @@ form gets drafted, whatever the venue calls it and whoever it is addressed
 to. Run the same session against the ICLR-shaped fixture to see it:
 
 ```bash
-python -c "import json; from refereekit.openreview import form as f; open('work/or-demo/form.json','w').write(f.to_json(f.parse_form(json.load(open('tests/fixtures/openreview_iclr_form.json')))))"
+.venv/bin/python -c "import json; from refereekit.openreview import form as f; open('work/or-demo/form.json','w').write(f.to_json(f.parse_form(json.load(open('tests/fixtures/openreview_iclr_form.json')))))"
 refereekit or-draft --session work/or-demo
 ```
 
@@ -421,11 +423,15 @@ false in the specific way the box exists to prevent. Which venues require
 one, and what they require, is a question to settle before you fetch
 anything: [Before you start](../before-you-start.md).
 
-`or-draft` takes two more options, and neither of them checks anything —
-both shape what is written. `--length <field>=<value>` is repeatable and
+`or-draft` takes three more options that shape what is written rather than
+gate the run — `--length name=value` (validated against the form's field
+names, as above), `--style`, and `--db`. `--length` is repeatable and
 applies to one prose field at a time; each field is drafted by its own
 backend call, so a call is told only its own length and only its own
-instruction from the venue (`fill.py:80-104`). `--db` mirrors
+instruction from the venue (`fill.py:80-104`). `--style` names the style
+guide the prose is written to, resolved exactly as it is on `draft` — the
+flag, then `REFEREEKIT_STYLE`, then the checkout's own `style/STYLE.md`;
+[Your voice](your-voice.md) covers what belongs in it. `--db` mirrors
 `review`'s: it defaults to `<session>/memory.db`, so passing
 `--db work/memory.db` on both commands is what makes notes for a venue
 accumulate across every paper you referee there. Memory is opened only when

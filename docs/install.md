@@ -27,7 +27,7 @@ and `tomllib`, the parser it is read with, is in the standard library from
 The install takes exactly one runtime dependency, PyMuPDF, which reads the
 PDF (`pyproject.toml:8`). Nothing else is needed to ingest, verify, serve
 or run a whole review against the offline backend, and the `pip install`
-line is the only step on this page that touches the network.
+line is the only step in Part 1 that touches the network.
 
 **`-e` is required, not a convenience.** refereekit finds its default
 style guide relative to its own source file: `_DEFAULT_STYLE` in
@@ -48,11 +48,12 @@ usage: refereekit [-h]
                   {ingest,verify,serve,draft,editor,mem-store,mem-recall,review,or-fetch,or-draft,or-responses} ...
 ```
 
-PyMuPDF 1.28.2, the version a fresh install picked up on 2026-08-15, adds
-one more line above those two: a deprecation warning about the `fitz`
-alias that `refereekit/ingest.py` still imports. It is harmless, but it
-goes to stdout rather than stderr, so redirect a command's output with
-that in mind.
+PyMuPDF 1.28.2, the version a fresh install picked up on 2026-08-15
+(`https://pypi.org/project/PyMuPDF/1.28.2/`), adds one more line above
+those two: a deprecation warning about the `fitz` alias that
+`refereekit/ingest.py` still imports. It is harmless, but it goes to
+stdout rather than stderr, so redirect a command's output with that in
+mind.
 
 `.venv/bin/refereekit` works from anywhere without activating the virtual
 environment. If you would rather type `refereekit`, activate it first —
@@ -123,6 +124,10 @@ refereekit draft --session work/tutorial
 
 Claude through your own AWS account. The `llm` extra installs the
 Anthropic SDK alone, so boto3 and botocore come from the SDK's own extra.
+The client refereekit registers here is the SDK's Bedrock Mantle client,
+which signs for the `bedrock-mantle` service at
+`https://bedrock-mantle.<region>.api.aws/anthropic` — check region
+availability and IAM against that.
 
 *Not run while writing this page: needs an AWS account.*
 
@@ -147,7 +152,7 @@ Claude through your own Google Cloud project. Signing in is Google
 Application Default Credentials, so `gcloud` holds the credential and
 refereekit never sees one.
 
-*This path is documented from the SDK's code and has not been run.*
+*Not run while writing this page: needs a Google Cloud project.*
 
 ```bash
 .venv/bin/pip install "anthropic[vertex]"
@@ -161,7 +166,15 @@ refereekit draft --session work/tutorial
 ```
 
 `REFEREEKIT_MODEL` is not optional on this deployment, and the refusal
-that says so is real — you can see it offline, with no key and no project:
+that says so is real — you can see it offline, with no key and no project,
+with `REFEREEKIT_FAKE` unset: the fake backend is marked zero-retention and
+never builds an SDK client, so with it still exported from [the
+tutorial](tutorial.md) the command below drafts instead of refusing.
+
+```bash
+unset REFEREEKIT_FAKE      # bash, zsh
+set -e REFEREEKIT_FAKE     # fish
+```
 
 ```bash
 REFEREEKIT_BACKEND=vertex refereekit draft --session work/tutorial
@@ -195,12 +208,10 @@ Vertex setup above is marked as unrun and why it sets `REFEREEKIT_MODEL`.
 `REFEREEKIT_ZERO_RETENTION=1` appears in all three blocks above because
 without it the manuscript path refuses to send anything at all. It is an
 attestation you make, not something refereekit can check, and what you are
-asserting depends on which deployment you chose: on the two cloud
-deployments the provider rather than Anthropic is the data processor, so
-it is that provider's terms and your own account's logging settings that
-the flag stands for. [Confidentiality](concepts/confidentiality.md) has
-the row-by-row table of what `=1` asserts on each; read the row that
-applies to you before you set it.
+asserting depends on which deployment you chose.
+[Confidentiality](concepts/confidentiality.md#the-attestation) has the
+row-by-row table of what `=1` asserts on each, and says who the data
+processor is on each; read the row that applies to you before you set it.
 
 ### Your .env
 

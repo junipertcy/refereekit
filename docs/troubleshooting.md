@@ -31,10 +31,10 @@ has exactly one entry and defaults every other venue to permitted, so
 seeing this means the venue you named is that one entry, or one you added
 yourself to a `REFEREEKIT_VENUE_POLICY` file.
 
-**Fix:** the message shows the override — if the rule has genuinely
-changed, save its `[venues]` block to a file and `export
-REFEREEKIT_VENUE_POLICY=<path to it>`. Otherwise use the venue's own review
-interface, as the message says.
+**Fix:** as of this version the printed key does not lift the gate — key
+the override on the bare venue name; see [Before you
+start](before-you-start.md#refereekit-knows-about-one-prohibition-and-cannot-discover-others).
+Otherwise use the venue's own review interface, as the message says.
 
 Printed as `review failed: …` under `review`; as `error: …` under `draft`,
 `editor`, `or-draft`, and `or-responses` — the same gate runs in all five,

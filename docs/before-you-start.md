@@ -56,9 +56,11 @@ prohibition, and it means a year in which the venue changes its rule is an
 override you write, not something refereekit notices.
 
 The gate can only act on a venue it was told about: `--venue`, the venue in
-a `--spec` file, or the venue `or-fetch` already recorded in the session.
-Run `review` on a NeurIPS paper without naming the venue anywhere and
-nothing stops the send. When it is named, the refusal looks like this:
+a `--spec` file, or a venue the session already records — the top-level one
+`or-fetch` wrote, or the one inside the verdict an earlier `review` saved
+(`refereekit/cli.py:39-47`). Run `review` on a NeurIPS paper without naming
+the venue anywhere and nothing stops the send. When it is named, the
+refusal looks like this:
 
 ```bash
 refereekit review tests/fixtures/real_paper.pdf --session work/neurips --venue NeurIPS.cc/2026/Conference

@@ -174,6 +174,10 @@ citable. One residual case sits outside this rule: a section-numbered
 label such as `2.1` is not a plain integer, so the run does not apply to
 it — it passes on bare existence in the extracted list instead, kept
 deliberately rather than changed silently (`refereekit/verify.py:81-87`).
+That branch stays out of reach through the documented flow, because
+`ingest` only ever extracts equation ids of one to three digits
+(`refereekit/ingest.py:5,20`): no `2.1` is ever in the list for it to find,
+so the residual applies only to a claim you type by hand.
 
 Figures use no such run — any extracted figure id passes:
 
