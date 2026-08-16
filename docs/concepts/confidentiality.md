@@ -153,9 +153,9 @@ refereekit itself reads.
 `ingest`, `verify`, and `serve` never touch the network on their own.
 There is one exception, and it happens only once a human opens what they
 produced: the rendered Q&A page loads MathJax, so that math notation in a
-model's answer typesets instead of showing as literal `$...$`, from a
-public CDN (`render.py:10`) — whether you open `index.html` directly or
-view it through `refereekit serve`.
+model's answer typesets instead of showing as literal `$...$`, from
+`cdn.jsdelivr.net`, a public CDN (`render.py:10`) — whether you open
+`index.html` directly or view it through `refereekit serve`.
 
 The browser makes that request when the page loads, not refereekit's own
 process, and the script tag names one fixed file with nothing else in the
