@@ -92,9 +92,12 @@ a blank line to finish asking.
 than the model's: `verdict (recommend)>` takes your recommendation in your
 own words (`minor revision`), `venue>` the venue (`PRX`), `major/minor>` how
 serious the revisions are. They are recorded as typed and become an input to
-both drafts. The venue typed here is recorded on the verdict, and that is
-late: `review` has already decided whether to open a venue memory by then,
-so pass `--venue` on the command line if you want one — see [The session
+the report draft; the editor's letter is written from the claim pool and
+your answers to the editor, and never sees the verdict at all. The venue
+typed here is recorded on the verdict, and that is late — `review` has
+already decided whether to open a venue memory by then, so pass `--venue` on
+the command line if you want one — but a later `draft` or `editor` run on
+this session does fall back to it. See [The session
 directory](reference/session.md).
 
 **The section-length gate.** `section lengths (name=len, comma-sep;
@@ -155,9 +158,10 @@ report.txt
 ```
 
 `doc.json` is the ingested manuscript: the text page by page, plus the
-figure, equation and section anchors extraction found in it. `index.html` is
-the question-and-answer page, `state.json` the claim pool and the verdict,
-and `ours/` the drafts. A session fetched from OpenReview holds more; every
+figure and equation anchors extraction found — and an empty section list,
+because heading detection finds none in this paper. `index.html` is the
+question-and-answer page, `state.json` the claim pool and the verdict, and
+`ours/` the drafts. A session fetched from OpenReview holds more; every
 entry that can appear, and which command writes it, is in [The session
 directory](reference/session.md).
 
@@ -235,13 +239,19 @@ refereekit serve --session work/tutorial
 serving work/tutorial at http://127.0.0.1:8888/
 ```
 
-`serve` offers the session directory as static files on `127.0.0.1` and runs
-until you interrupt it with Ctrl-C, logging each request beneath that line.
+`serve` offers the session directory as static files on `127.0.0.1`, at port
+8888 or the next free one if 8888 is taken, and runs until you interrupt it
+with Ctrl-C. It prints whichever port it bound — the line above — and logs
+each request beneath it.
+
 Open the URL and you get `index.html`, the question-and-answer page, with
-mathematics typeset. That page pulls MathJax from a CDN, which is the one
-network request in this tutorial — and the browser makes it, not refereekit,
-which sends nothing anywhere in this whole run. Offline the page still
-loads; its mathematics simply stays as raw TeX.
+mathematics typeset. That page pulls MathJax from a CDN, which is the only
+request that leaves your machine in this whole tutorial, and the browser
+makes it, not refereekit, which sends nothing anywhere. The page also polls
+the local server every 1.5 seconds, so that it reloads itself once you
+answer another question; that is what keeps filling the request log, and it
+never leaves the loopback address. Offline the page still loads, and its
+mathematics simply stays as raw TeX.
 
 ## 4. Verify a quotation by hand
 
