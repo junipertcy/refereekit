@@ -50,8 +50,13 @@ the time. One paper, one session, keeps that question from ever coming up.
 
 ## `--venue` does two things
 
-Pass `--venue` and it does two separate jobs: it runs the policy gate, and
-it decides whether `review` opens a venue memory at all.
+Passing `--venue` is the most direct way to set it, but not the only one:
+`review` resolves the venue in this order — the flag if you gave it,
+otherwise a `--spec` file's own `venue`, otherwise a venue this session
+already has on record, from an earlier `review` into it or from
+`or-fetch` (`refereekit/cli.py:218-219`). However it gets there, that
+venue does two separate jobs: it runs the policy gate, and it decides
+whether `review` opens a venue memory at all.
 
 The policy gate runs first — before the PDF is opened and before a backend
 is even built (`refereekit/cli.py:220-221`) — so a venue refereekit's
@@ -78,12 +83,13 @@ impossible to forget, not to discover one for you. The same gate runs in
 [Confidentiality](../concepts/confidentiality.md#the-venue-gate) for all
 five.
 
-The second job is quieter. `review` opens a memory database only when a
-venue is already known by the time it gets there
-(`refereekit/cli.py:225`) — without `--venue`, none is, so no `memory.db`
-is created and there is nothing to recall, even if you type a venue at the
-verdict prompt later: that answer is recorded too late to change this
-run's decision. The database it opens defaults to `<session>/memory.db`
+The second job is quieter. `review` opens a memory database only when
+that same resolved venue is known by the time it gets there
+(`refereekit/cli.py:225`) — with none of the three above (no `--venue`, no
+`--spec`, and nothing already on record), no `memory.db` is created and
+there is nothing to recall, even if you type a venue at the verdict
+prompt: that answer is saved too late to change this run's decision. The
+database it opens defaults to `<session>/memory.db`
 (`refereekit/cli.py:222`), one file per session, so a note stored under
 one paper's session stays invisible to the next paper's. Pass `--db
 work/memory.db` — the same path every time — if you want notes for a venue
@@ -112,13 +118,17 @@ rather than typing the first thing that comes to mind. If you would rather
 answer every gate from a file than type at each prompt, see [Driving a
 review from a spec](review-spec.md).
 
-This same command can refuse in three more ways before it ever sends
-anything, none of which needs a key, an account, or a network connection
-to reproduce — try each one now, against [the tutorial](../tutorial.md)'s
+This same command can also refuse in three more ways, and it is worth
+knowing which of them land before anything is sent and which do not. None
+of the three needs a key, an account, or a network connection to
+reproduce — try each one now, against [the tutorial](../tutorial.md)'s
 own session, before you ever run this for real.
 
 If `REFEREEKIT_ZERO_RETENTION` was never exported, the manuscript path
-refuses regardless of which deployment or account you have configured:
+refuses regardless of which deployment or account you have configured —
+this one always lands before anything is sent, under `review`, `draft`,
+or `editor` alike, because `complete()` checks it before calling the
+backend at all (`refereekit/llm.py:29-36`):
 
 ```bash
 refereekit draft --session work/tutorial
@@ -129,9 +139,10 @@ error: refusing to send: backend is not marked zero_retention
 ```
 
 If `REFEREEKIT_BACKEND` names something other than `anthropic`,
-`bedrock`, or `vertex` — a typo, usually — refereekit refuses rather than
-quietly falling back to a default, because a misspelling must not send a
-manuscript to whichever deployment happens to be the default:
+`bedrock`, or `vertex` — a typo, usually — refereekit refuses the same
+way, before anything is sent, rather than quietly falling back to a
+default: a misspelling must not send a manuscript to whichever deployment
+happens to be the default:
 
 ```bash
 REFEREEKIT_BACKEND=foo refereekit draft --session work/tutorial
@@ -144,8 +155,9 @@ error: unknown deployment 'foo'; expected one of anthropic, bedrock, vertex
 And if the style guide cannot be found — a typo'd `--style` or
 `REFEREEKIT_STYLE` path, or a non-editable install with no
 `style/STYLE.md` to fall back to (see [Install, part
-1](../install.md#part-1-get-it-running)) — the run refuses rather than
-drafting in no particular voice:
+1](../install.md#part-1-get-it-running)) — where this lands is not the
+same for every command. Under `draft` or `editor` it is exactly like the
+two refusals above, caught before anything is sent:
 
 ```bash
 REFEREEKIT_STYLE=/nonexistent/STYLE.md refereekit draft --session work/tutorial
@@ -155,15 +167,27 @@ REFEREEKIT_STYLE=/nonexistent/STYLE.md refereekit draft --session work/tutorial
 error: Style guide not found: /nonexistent/STYLE.md
 ```
 
-All three exit 2, and all three happen the same way under `review`,
-`draft`, and `editor` alike, because the three commands share the same
-backend construction and the same style resolution.
+Under `review` it is not. The style guide is only read once `review`
+starts drafting the report — after the summary and every question in the
+Q&A loop have already been sent, and after you have answered the verdict
+and section-length prompts (`refereekit/agent/loop.py:20-47`;
+`load_style` runs inside `drafts.report`/`drafts.editor_letter`,
+`refereekit/drafts.py:121,159`). A bad style path does not stop `review`
+from sending the manuscript — it only means the report and editor's
+letter are never written, with the session's `doc.json`, `state.json`,
+and `index.html` already on disk from the steps that came before it.
+Check `--style` and `REFEREEKIT_STYLE` before a live `review` run rather
+than counting on this to catch a typo early; if it does happen anyway,
+fix the path and re-run `draft` or `editor` on the same session rather
+than the whole review.
+
+All three exit 2, wherever they land.
 
 ## Read the flags
 
 `review complete: <report path>, <editor path> (<N> flag(s))` is only a
-count — it tells you a drafted sentence cited something it should not
-have, not which one. To find out, run `refereekit draft --session
+count — it tells you the drafts contain a citation the checker could not
+stand behind, not which one. To find out, run `refereekit draft --session
 work/<name>`: it redrafts `ours/report.txt` from the same claim pool and
 prints one `FLAG <kind> (<anchor>): <reason>` line per flag, instead of
 just the total. Against the tutorial's own session:
