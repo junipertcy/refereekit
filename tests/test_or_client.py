@@ -23,6 +23,28 @@ def _client(**kw):
     return FakeORClient(notes=notes, **kw)
 
 
+# ---- who we are
+
+def test_profile_id_reads_the_id_login_already_stored():
+    """openreview-py sets client.profile during login, so our own id costs no
+    request. The v1 idiom of calling get_profile() with no argument is not
+    "my profile" in v2: it builds an empty query that the API rejects with a
+    400 ValidationError, which took out every command that lists assignments.
+    """
+    c = _client()
+    assert orclient.profile_id(c) == "~Test_User1"
+    assert c.kwargs_for("get_profile") == []
+
+
+def test_profile_id_errors_when_login_left_no_profile():
+    """A token-constructed client can reach us with profile unset. Naming that
+    beats an AttributeError escaping this module's boundary."""
+    c = _client()
+    c.profile = None
+    with pytest.raises(orclient.ORError, match="profile"):
+        orclient.profile_id(c)
+
+
 # ---- assignments
 
 def test_list_assignments_returns_number_and_title():

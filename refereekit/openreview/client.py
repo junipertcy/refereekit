@@ -64,10 +64,19 @@ def _content_value(note, key: str, default: str = ""):
 
 
 def profile_id(client) -> str:
-    try:
-        return client.get_profile().id
-    except Exception as e:
-        raise ORError(f"could not read your openreview profile: {e}") from e
+    """Our own profile id, which login already established.
+
+    Read from the client rather than fetched. get_profile() takes an email or
+    an id and looks that up; with no argument openreview-py v2 sends an empty
+    query and the API answers 400 "request must NOT have fewer than 1
+    properties", so the v1 idiom of calling it bare to learn who we are fails
+    against every venue. The same v1/v2 drift already caught get_attachment.
+    """
+    got = getattr(getattr(client, "profile", None), "id", None)
+    if not got:
+        raise ORError(
+            "could not read your openreview profile from the login response")
+    return got
 
 
 def list_assignments(client, venue: str) -> tuple:

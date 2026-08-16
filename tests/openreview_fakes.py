@@ -43,7 +43,10 @@ class FakeORClient:
                  replies=None, raise_on=()):
         # The default pdf is not a real PDF: it exercises byte passthrough only.
         # A test that ingests what it fetches must pass real_pdf_path.read_bytes().
-        self.profile = profile
+        # A Profile object, not a bare id: the real client builds one during
+        # login, and code that reads client.profile.id must fail here when it
+        # would fail against the API.
+        self.profile = FakeProfile(id=profile)
         self._edges = list(edges or [])
         self._notes = dict(notes or {})        # number -> FakeNote
         self._invitation = invitation
@@ -61,9 +64,15 @@ class FakeORClient:
     def kwargs_for(self, method):
         return [kw for name, kw in self.calls if name == method]
 
-    def get_profile(self):
-        self._log("get_profile")
-        return FakeProfile(id=self.profile)
+    def get_profile(self, email_or_id=None):
+        """A lookup, not "my profile". openreview-py v2 builds an empty query
+        when called with no argument and the API rejects it with a 400
+        ValidationError, so the no-arg call is an error here too rather than a
+        convenient way to learn who we are."""
+        self._log("get_profile", email_or_id=email_or_id)
+        if not email_or_id:
+            raise Boom("request must NOT have fewer than 1 properties")
+        return FakeProfile(id=email_or_id)
 
     def get_all_edges(self, **kw):
         self._log("get_all_edges", **kw)
