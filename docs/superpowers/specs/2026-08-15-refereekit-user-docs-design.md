@@ -177,9 +177,10 @@ checks it.
 
 ### 4.1 `docs/README.md`
 
-The routing table from §3.2, one paragraph on what refereekit is, and nothing
-else. No install instructions, no commands — those exist one click away and a
-duplicate here is the first thing to go stale.
+The routing table from §3.2, one paragraph on what refereekit is, and a second
+small table listing the pages the reading paths do not reach — routing, not
+explanation. No install instructions, no commands — those exist one click away
+and a duplicate here is the first thing to go stale.
 
 ### 4.2 `before-you-start.md`
 
@@ -420,9 +421,10 @@ Exit codes are a section of their own: `verify` returns 0 for PASS, 1 for FAIL
 and 3 for FLAG so that calling scripts can distinguish a confirmed claim from an
 unverifiable one; every other command returns 0 on success and 2 on an input
 error with the reason on stderr — except `serve`, which runs until interrupted
-and never returns 2 (a missing session, or one with no `index.html`, serves
-404s), and which moves to the next free port above `--port` when that one is
-busy, printing the port it chose. The reference records each command's error
+and never returns 2 (a missing session directory serves 404s; an existing one
+with no `index.html` serves a directory listing with HTTP 200), and which moves
+to the next free port above `--port` when that one is busy, printing the port
+it chose. The reference records each command's error
 prefix as printed (`error:`, `review failed:`, `mem-store failed:`), the
 precedence of `review`'s venue (`--venue`, then the spec's, then the
 session's), and the asymmetry that `mem-store --db` is optional while
@@ -597,8 +599,11 @@ Documentation that has not been run is a guess.
 3. **`reference/environment.md` is checked against three sources**, so neither
    list can be short: `.env.template`, every `os.environ` read in the package,
    and — for the variables refereekit does not read — the SDK's own reads for
-   each registered deployment (`anthropic/lib/bedrock/_client.py` and
-   `anthropic/lib/vertex/_client.py` in the installed SDK).
+   each registered deployment. `bedrock` registers `AnthropicBedrockMantle`
+   (`refereekit/llm.py:61`), so its reads are in
+   `anthropic/lib/bedrock/_mantle.py` plus `anthropic/lib/aws/_credentials.py`,
+   not `anthropic/lib/bedrock/_client.py`; `vertex` reads are in
+   `anthropic/lib/vertex/_client.py`.
 4. **Anything needing a network or a key is marked as unverified** rather than
    presented as tested. That is `or-fetch`, `or-draft`, `or-responses`, every
    real-LLM invocation, and the Bedrock and Vertex setup paths.
@@ -636,5 +641,38 @@ Found during the spec review; the docs describe the behaviour as it is.
    after a re-fetch.
 4. `pyproject.toml` has no `bedrock` or `vertex` extras, so the docs point at
    the SDK's own (`anthropic[bedrock]`, `anthropic[vertex]`).
-5. `serve` has no error handling: a missing session serves 404s rather than
-   exiting 2, unlike every other command.
+5. `serve` has no error handling, unlike every other command: a missing session
+   directory serves 404s rather than exiting 2, and an existing session with no
+   `index.html` serves a directory listing with HTTP 200 — Python's
+   `SimpleHTTPRequestHandler` default (`refereekit/render.py:43-45`) — so a
+   session that has only been ingested looks served rather than unready.
+6. `refereekit/ingest.py:2` imports `fitz`. PyMuPDF ≥ 1.28.2 prints a `fitz`
+   deprecation warning to stdout before every command's output; the repo
+   `.venv` at 1.28.0 is silent, so the warning shows up only on a fresh
+   install, and it lands on stdout rather than stderr.
+7. `refereekit/policy.py:75-83`: the refusal message names an override keyed on
+   the full venue id, which the built-in `neurips` entry shadows — `_table()`
+   (52-61) puts the built-in first and `llm_permitted` (64-72) returns on the
+   first key contained in the normalised venue. Only a bare-name override
+   works, so the message as printed cannot lift the gate it describes.
+8. `review` reads `--style`/`REFEREEKIT_STYLE` only when it starts drafting
+   (`refereekit/agent/loop.py:36`, `refereekit/drafts.py:121`), after the
+   manuscript has already been sent. The path should be validated before the
+   first `complete()`, so a typo costs nothing.
+9. `drafts.report()` calls `complete()` before `session.load_doc()`
+   (`refereekit/drafts.py:123-124`), so `draft` on a session with no `doc.json`
+   makes a model call before failing.
+10. `or-draft`'s venue gate reads only the top-level `venue` state key
+    (`refereekit/cli.py:352`), while `draft`, `editor`, `or-responses` and
+    `review` go through `_session_venue` (`cli.py:39-47`), which also reads the
+    venue inside a saved verdict. Unobservable through the documented flow
+    today, because every `or-draft` session was fetched by `or-fetch`, which
+    writes the top-level key.
+11. `scripts/load-env.fish` exported every single-quoted `.env` value as the
+    literal string `$1`: the replacement was written `'\$1'`, which
+    `string replace -r` reads as an escaped dollar rather than a capture group.
+    Fixed on this branch, since it is a documented command in `install.md`.
+12. `pyproject.toml`'s `llm` extra installs the Anthropic SDK alone. Bedrock
+    additionally needs `anthropic[bedrock]` and Vertex `anthropic[vertex]`,
+    which is why the docs point at the SDK's own extras (item 4, stated
+    precisely).

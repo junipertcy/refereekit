@@ -1157,3 +1157,49 @@ Plus anything new found while writing, each with the file and line and what was 
 **Placeholders:** none — every page task carries the facts, sources, commands and expected outputs, and every output quoted as "Expected" was produced by a real run on 2026-08-15 against the current tree.
 
 **Consistency:** the fixed strings (`REFEREEKIT_FAKE_TEXT`, the H1s, `work/tutorial`, `work/memory.db`, `ICLR.cc/2026/Conference`) are the same in every task that uses them; the tutorial outputs quoted in Tasks 4, 5, 8, 12 come from the same run.
+
+---
+
+## Corrections recorded during execution
+
+Written after the whole-branch review, in the fix wave of 2026-08-16. The task
+text above is left as it was written; each entry below says what turned out to
+be wrong and what the pages now say instead.
+
+- **PATHCHECK needs one more exclusion.** Run it with
+  `| grep -v -- "--session directory"` appended. `refereekit`'s own error
+  message — `session <dir> holds submission N, not M; use a fresh --session
+  directory for a different paper` — is quoted verbatim on
+  `docs/troubleshooting.md` and `docs/reference/cli.md`, and the word
+  `directory` matches the check's path pattern. It is a quoted CLI message, not
+  a documented session path.
+- **`serve` on a session with no `index.html` returns a directory listing, not
+  a 404.** Only a missing session directory 404s; an existing directory with no
+  index file gets Python's `SimpleHTTPRequestHandler` listing with HTTP 200
+  (`refereekit/render.py:43-45`). Affects Task 2's `serve` behaviour line, Task
+  12 item 2, and Task 17's defect 5. `docs/guides/piecemeal.md` had it right;
+  `docs/reference/cli.md` and the spec's §4.10 and §7.1 have been corrected.
+- **The registered Bedrock client is the SDK's Bedrock Mantle client.**
+  `refereekit/llm.py:61` builds `AnthropicBedrockMantle`, so Task 3's source for
+  the deployment's environment reads is `anthropic/lib/bedrock/_mantle.py` plus
+  `anthropic/lib/aws/_credentials.py`, not `anthropic/lib/bedrock/_client.py`.
+  What that changes on the page: the base-URL override is
+  `ANTHROPIC_BEDROCK_MANTLE_BASE_URL` (`_mantle.py:144`), the region is
+  `AWS_REGION` or `AWS_DEFAULT_REGION` (`_credentials.py:90`), the token
+  alternatives are `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_AWS_API_KEY`
+  (`_mantle.py:38`), and the client signs for service `bedrock-mantle` against
+  `https://bedrock-mantle.<region>.api.aws/anthropic` (`_mantle.py:36,152`).
+- **Task 15's venue facts re-checked on 2026-08-16.** Both cited pages — the
+  NeurIPS 2025 LLM policy for reviewers and the ICLR 2026 reviewer guide's LLM
+  section — were unchanged from what was read on 2026-08-15, so the quotations
+  and the "as of 2026-08-15" dates on `docs/before-you-start.md` stand.
+- **The refusal demos need `REFEREEKIT_FAKE` unset.** With it still exported
+  from the tutorial, `_backend()` returns `FakeBackend` (`refereekit/cli.py:21-22`),
+  which is marked `zero_retention=True` (`refereekit/llm.py:20`) and never
+  builds an SDK client, so the zero-retention, unknown-deployment and
+  no-default-model refusals all draft successfully instead of refusing. The
+  three pages carrying such a demo — `docs/guides/journal-review.md`,
+  `docs/install.md`, `docs/concepts/confidentiality.md` — now say so and show
+  the `unset` once each. On `journal-review.md` the retention refusal also needs
+  the `llm` extra installed: without the SDK, `client_for` fails first, with
+  `cannot use deployment 'anthropic': No module named 'anthropic'`.
