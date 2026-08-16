@@ -68,11 +68,26 @@ FLAG — so a script can branch on `$?` (`$status` in fish) instead of
 parsing the printed line; the full table, shared by every command, is in
 [Command reference](../reference/cli.md#exit-codes). `--kind` accepts
 `quote` and `page` — the same check either way, since `--anchor` is a
-page number for both — plus `equation` and `figure`, which check only
-that the anchor was extracted at all; any other `--kind` always comes
-back FLAG, because refereekit has no mechanical way to check it. What
-each verdict actually promises, precisely, is [What verification
-means](../concepts/verification.md).
+page number for both — plus `equation` and `figure`. `figure` checks
+only that the anchor was extracted at all; `equation` checks the same
+for a non-numeric id such as `2.1`, but a plain number must also fall
+inside the contiguous run of extracted numbers starting at 1 —
+extraction picks up page-margin noise alongside real labels, so a
+number found outside that run still FAILs, not PASSes, even though it
+really was extracted:
+
+```bash
+refereekit verify --session work/ref --kind equation --anchor 18 --text ""
+```
+
+```text
+FAIL: equation (18) is outside the range extraction can vouch for (1-7)
+```
+
+Any other `--kind` always comes back FLAG, because refereekit has no
+mechanical way to check it. Why the run exists, and what each verdict
+actually promises, precisely, is [What verification
+means](../concepts/verification.md#extraction-limits).
 
 ## Read the rendered page: `serve`
 
@@ -176,9 +191,11 @@ and page 2 into the pool — one PASS, one FLAG, both kept — so only page
 here. A pool is what running the loop first buys you; skip it, as
 `work/ref` did, and every citation is unearned until you check it. `not
 in verified pool` is one of the two reasons `draft` and `editor` flag a
-citation; the other, `failed re-verification`, only arises once a
-session's `doc.json` changes under a claim already in the pool — see
-[What verification
+citation; the other, `failed re-verification`, means the anchor was in
+the pool but no longer verifies — either the session's `doc.json`
+changed under it (a later `or-fetch` re-ingested a revised paper), or
+the drafting model altered the quoted words when it wrote the citation
+into its own prose. See [What verification
 means](../concepts/verification.md#the-two-draft-flags) for both.
 
 `draft` takes `--length name=value`, repeatable, to shorten or lengthen
