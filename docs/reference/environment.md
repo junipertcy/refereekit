@@ -22,14 +22,15 @@ deployment a referee with an API key already has, not because it is
 preferred over `bedrock` or `vertex` — the next table lists what each of
 those two need beyond this one.
 
-Two other entries compete with something else, rather than standing alone.
-On `draft`, `editor`, `review` and `or-draft`, `--style` beats
-`REFEREEKIT_STYLE`, which beats the checkout's own `style/STYLE.md` — see
-[the command reference](cli.md) for which subcommands accept the flag.
-`REFEREEKIT_MODEL` beats the per-deployment default in the table above, and
-on `vertex` it is not optional: that deployment has no confirmed default, so
-`draft`, `editor`, `review` and `or-draft` refuse rather than guess at a
-model id.
+Two of the variables above follow a precedence order, rather than being the
+only source for that setting. On `draft`, `editor`, `review` and `or-draft`,
+`--style` beats `REFEREEKIT_STYLE`, which beats the checkout's own
+`style/STYLE.md` — see [the command reference](cli.md) for which
+subcommands accept the flag. `REFEREEKIT_MODEL` beats the per-deployment
+default in the table above, and on `vertex` it is not optional: that
+deployment has no confirmed default, so every command that builds a
+backend — `draft`, `editor`, `review`, `or-draft` and `or-responses` —
+refuses rather than guess at a model id.
 
 ## Variables the SDK reads
 
