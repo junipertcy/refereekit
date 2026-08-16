@@ -32,7 +32,7 @@ for _line in (cat $_envfile)
     set -l _key (string trim -- $_pair[1])
     set -l _val (string trim -- $_pair[2])
     set _val (string replace -r '^"(.*)"$' '$1' -- $_val)
-    set _val (string replace -r "^'(.*)'\$" '\$1' -- $_val)
+    set _val (string replace -r "^'(.*)'\$" '$1' -- $_val)
     # A blank value is left unset rather than exported empty. refereekit
     # rejects an empty OPENREVIEW_USERNAME exactly as it rejects a missing
     # one, and an exported empty is the harder of the two to notice.
